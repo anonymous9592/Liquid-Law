@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Case Canvas — prototype</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root {
+    --bg: #f3f1ec; --panel: #ffffff; --ink: #1f1d1a; --muted: #7a7570; --line: #e2ded6;
+    --accent: #b5542d; --accent-soft: #fbe9df; --sel: rgba(255, 196, 0, .35); --lasso: #2b6cb0;
+    --ws-bg: #faf8f3; --card: #fff; --shadow: 0 2px 10px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.4 -apple-system, "Segoe UI", Inter, system-ui, sans-serif; color: var(--ink); background: var(--bg); overflow: hidden; }
+  button { font: inherit; }
+
+  /* ---------- top bar ---------- */
+  #top { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #top .brand { font-weight: 700; letter-spacing: .2px; margin-right: 8px; }
+  #top .brand span { color: var(--accent); }
+  .btn { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: #f7f5f0; }
+  .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.small { padding: 3px 8px; font-size: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg .btn { border: 0; border-radius: 0; }
+  .seg .btn + .btn { border-left: 1px solid var(--line); }
+  #status { margin-left: auto; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  #bar { width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #search { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 180px; }
+
+  /* ---------- layout ---------- */
+  #main { display: flex; height: calc(100% - 48px); }
+  #index { width: 260px; min-width: 180px; background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 10px; }
+  #index h3 { margin: 4px 6px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .node { display: block; padding: 4px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node:hover { background: #f3f1ec; }
+  .node.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .node .pg { float: right; color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .node.l1 { font-weight: 600; margin-top: 6px; }
+  .node.l2 { padding-left: 18px; }
+  .node.l3 { padding-left: 32px; }
+  .node.l4 { padding-left: 46px; font-size: 13px; }
+  .node.l5 { padding-left: 60px; font-size: 13px; }
+  .node.l6 { padding-left: 74px; font-size: 12px; }
+  .node.annex { color: #5a4d9a; }
+  #indexEmpty { color: var(--muted); font-size: 12px; padding: 6px; }
+
+  #readerWrap { flex: 1 1 50%; min-width: 300px; display: flex; flex-direction: column; min-height: 0; }
+  #docTabs { display: flex; gap: 4px; padding: 6px 8px 0; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; min-height: 36px; }
+  #docTabs:empty { display: none; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; background: #f3f1ec; font-size: 12px; cursor: pointer; max-width: 220px; white-space: nowrap; }
+  .tab.active { background: #fff; font-weight: 600; box-shadow: 0 1px 0 #fff; }
+  .tab i { width: 8px; height: 8px; border-radius: 50%; background: var(--dc); flex: none; }
+  .tab .nm { overflow: hidden; text-overflow: ellipsis; }
+  .tab .st { color: var(--muted); font-weight: 400; }
+  .tab .cl { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+  .tab .cl:hover { color: var(--accent); }
+  #reader { flex: 1; overflow: auto; position: relative; background: #e9e6df; touch-action: pan-y pinch-zoom; }
+  #reader.tool-lasso, #reader.tool-select { touch-action: none; }
+  .pages { padding: 20px 0 80px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .page { position: relative; background: #fff; box-shadow: var(--shadow); }
+  .page canvas { display: block; width: 100%; height: 100%; }
+  .page .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
+  .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; }
+  .textLayer span { position: absolute; color: transparent; white-space: pre; transform-origin: 0 0; cursor: text; }
+  .textLayer span::selection { background: var(--sel); }
+  .textLayer span.hit { background: rgba(255, 196, 0, .45); }
+  .textLayer span.inlasso { background: rgba(43,108,176,.25); }
+  .tool-hand .textLayer, .tool-lasso .textLayer { pointer-events: none; user-select: none; }
+  .ovl { position: absolute; inset: 0; pointer-events: none; }
+  .tool-lasso .ovl { pointer-events: auto; cursor: crosshair; }
+  .ovl path.lasso { fill: rgba(43,108,176,.12); stroke: var(--lasso); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .ovl rect.flash { fill: none; stroke: var(--accent); stroke-width: 3; animation: flash 1.6s ease-out forwards; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .marker { position: absolute; right: -14px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--accent); cursor: pointer; pointer-events: auto; }
+  .pageNo { position: absolute; left: 0; top: -16px; font-size: 11px; color: var(--muted); }
+  .ocrTag { position: absolute; right: 0; top: -16px; font-size: 11px; color: var(--muted); }
+  .ocrTag.busy { color: var(--accent); }
+
+  #selBox { position: absolute; z-index: 4; border: 1.5px solid var(--accent); background: rgba(181,84,45,.08); pointer-events: auto; cursor: grab; display: none; }
+  #selChip { position: absolute; transform: translate(-50%, -100%); margin-top: -8px; background: var(--ink); color: #fff; border-radius: 999px; padding: 6px 12px; font-size: 12px; white-space: nowrap; cursor: pointer; display: none; pointer-events: auto; z-index: 5; box-shadow: var(--shadow); }
+  #selChip b { color: #ffd27a; }
+
+  #divider { width: 6px; cursor: col-resize; background: var(--line); }
+  #divider:hover { background: #cfc9bf; }
+
+  /* ---------- workspace ---------- */
+  #wsWrap { flex: 1 1 50%; min-width: 300px; display: flex; flex-direction: column; background: var(--ws-bg); }
+  #wsBar { height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #wsBar .title { font-weight: 600; margin-right: 6px; }
+  #ws { flex: 1; position: relative; overflow: hidden; touch-action: none; background-image: radial-gradient(#d8d3c8 1px, transparent 1px); background-size: 24px 24px; cursor: grab; }
+  #ws.pen { cursor: crosshair; }
+  #ws.link { cursor: cell; }
+  #wsInner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  #edges, #ink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #edges { pointer-events: none; }
+  #wsInner { z-index: 1; }
+  #edges line, #edges path { stroke: #6b6560; stroke-width: 2; fill: none; pointer-events: stroke; cursor: pointer; }
+  #edges text { font-size: 12px; fill: #4a4540; paint-order: stroke; stroke: var(--ws-bg); stroke-width: 4px; pointer-events: auto; cursor: text; }
+  #edges text.ph { fill: #b0a99f; font-style: italic; }
+  #edges g.sel line { stroke: var(--accent); stroke-width: 3; }
+  .edgeEdit { position: fixed; z-index: 1000; width: 160px; font: 12px/1.2 inherit; padding: 4px 6px; border: 1px solid var(--accent); border-radius: 6px; }
+  #ink { pointer-events: none; z-index: 50; }
+  #ws.pen #ink { pointer-events: auto; }
+  #ink path { fill: none; stroke: #1b4ea3; stroke-linecap: round; stroke-linejoin: round; }
+
+  .card { position: absolute; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+  .card.selected { outline: 2px solid var(--accent); }
+  .card.linkSrc { outline: 2px dashed #1b4ea3; }
+  .card .hd { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #f7f5f0; border-bottom: 1px solid var(--line); cursor: grab; user-select: none; }
+  .card { --dc: var(--accent); border-top: 3px solid var(--dc); }
+  .card .hd .src { font-size: 11px; color: var(--dc); background: color-mix(in srgb, var(--dc) 12%, #fff); border-radius: 999px; padding: 2px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; }
+  .card .hd .src .dn { color: #fff; background: var(--dc); border-radius: 999px; padding: 1px 6px; margin: 0 2px 0 -5px; font-weight: 600; }
+  .card .hd .src:hover { text-decoration: underline; }
+  .card .hd .tag { font-size: 11px; color: var(--muted); }
+  .card .hd .x { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+  .card .crop { display: block; width: 100%; background: #fff; border-bottom: 1px solid var(--line); }
+  .card .txt { padding: 8px 10px; font-size: 13px; color: #3b3732; max-height: 140px; overflow: auto; white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif; }
+  .card .note { padding: 8px 10px; min-height: 48px; outline: none; font-size: 13px; }
+  .card .note:empty::before { content: attr(data-ph); color: var(--muted); }
+  .card.noteCard .note { min-height: 100px; font-size: 14px; }
+  .card .rz { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #cfc9bf 50%); }
+  #wsHint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 12px; pointer-events: none; }
+
+  #ghost { position: fixed; z-index: 999; pointer-events: none; background: #fff; border: 1px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow); padding: 6px 10px; font-size: 12px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none; }
+
+  #drop { position: absolute; inset: 48px 0 0 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--muted); background: rgba(243,241,236,.92); z-index: 20; }
+  #drop.hidden { display: none; }
+  #drop .big { font-size: 20px; color: var(--ink); font-weight: 600; }
+
+  @media (max-width: 900px) { #index { display: none; } }
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="brand">Case <span>Canvas</span></div>
+  <label class="btn">📄 Open PDF(s) <input id="file" type="file" accept="application/pdf" multiple hidden></label>
+  <button class="btn" id="loadSample">Sample: Petition</button>
+  <button class="btn" id="loadSample2">Sample: Counter</button>
+  <div class="seg" id="tools">
+    <button class="btn active" data-tool="hand" title="Scroll / pan">✋ Hand</button>
+    <button class="btn" data-tool="select" title="Select text">⌶ Text</button>
+    <button class="btn" data-tool="lasso" title="Lasso a region">⭕ Lasso</button>
+  </div>
+  <input id="search" placeholder="Find in document…" />
+  <div id="status"><span id="statusTxt">No document</span><div id="bar"><i></i></div></div>
+</div>
+
+<div id="main">
+  <aside id="index">
+    <h3>Index</h3>
+    <div id="tree"><div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div></div>
+  </aside>
+
+  <section id="readerWrap">
+    <div id="docTabs"></div>
+    <div id="reader" class="tool-hand">
+      <div id="selBox"></div>
+      <div id="selChip">Drag into workspace → &nbsp;or&nbsp; <b>click to send</b></div>
+    </div>
+  </section>
+
+  <div id="divider"></div>
+
+  <section id="wsWrap">
+    <div id="wsBar">
+      <span class="title">Workspace</span>
+      <div class="seg">
+        <button class="btn active" data-ws="move">✋ Move</button>
+        <button class="btn" data-ws="pen">✒️ Pen</button>
+        <button class="btn" data-ws="link">⤷ Link</button>
+      </div>
+      <button class="btn" id="addNote">＋ Note</button>
+      <button class="btn" id="undoInk" title="Undo last pen stroke">↶ Ink</button>
+      <button class="btn" id="fit" title="Reset view">⤢</button>
+      <button class="btn" id="exportWs" title="Download workspace as JSON">⬇ JSON</button>
+    </div>
+    <div id="ws">
+      <svg id="edges"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b6560"/></marker></defs><g id="edgesG"></g></svg>
+      <div id="wsInner">
+        <div id="cards"></div>
+      </div>
+      <svg id="ink"><g id="inkG"></g></svg>
+      <div id="wsHint">Lasso or select text on the left, then drag it here. Pen: draw anywhere. Link: click two cards.</div>
+    </div>
+  </section>
+</div>
+
+<div id="ghost"></div>
+<div id="drop">
+  <div class="big">Drop a scanned PDF here</div>
+  <div>OCR runs automatically in your browser. Nothing is uploaded.</div>
+  <div style="font-size:12px">or load the two fabricated samples (a writ petition and the State's counter) to try cross-document linking</div>
+</div>
+
+<script type="module">
+import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
+
+// ---- pdf.js worker (cross-origin safe via blob import) ----
+{
+  const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  const blob = new Blob([`import "${workerUrl}";`], { type: 'text/javascript' });
+  pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(blob), { type: 'module' });
+}
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const reader = $('#reader');
+
+// =====================================================================
+//  STATE
+// =====================================================================
+// Several documents can be open at once; `doc` is the one shown in the reader. The workspace is shared by all of them.
+const docs = [];                        // [{ id, name, hue, pdf, pages, pagesEl, pageWidth, index }]
+let doc = null;                         // active document
+let nextDocId = 1;
+const HUES = [18, 210, 140, 280, 45, 330, 180];
+const ws = { x: 40, y: 40, z: 1, cards: [], edges: [], strokes: [], tool: 'move', linkSrc: null, selected: null, nextId: 1 };
+let tool = 'hand';
+let selection = null;                   // { doc, page, bbox:{x,y,w,h} (normalised), text }
+
+const statusTxt = $('#statusTxt'), bar = $('#bar i');
+const setStatus = (t, frac) => { statusTxt.textContent = t; if (frac != null) bar.style.width = `${Math.round(frac * 100)}%`; };
+const docById = id => docs.find(d => d.id === id);
+const pageOf = el => docById(+el.dataset.doc)?.pages[+el.dataset.n - 1];   // page record from a .page element
+
+// =====================================================================
+//  LOADING
+// =====================================================================
+$('#file').addEventListener('change', e => { [...e.target.files].forEach(openFile); e.target.value = ''; });
+$('#loadSample').addEventListener('click', async () => {
+  setStatus('Fetching sample…');
+  const r = await fetch('sample/scanned_petition.pdf');
+  openFile(new File([await r.blob()], 'scanned_petition.pdf'));
+});
+$('#loadSample2').addEventListener('click', async () => {
+  setStatus('Fetching sample…');
+  const r = await fetch('sample/scanned_counter.pdf');
+  openFile(new File([await r.blob()], 'scanned_counter.pdf'));
+});
+['dragover', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault();
+  if (ev === 'drop') [...e.dataTransfer.files].forEach(openFile);
+}));
+
+async function openFile(file) {
+  $('#drop').classList.add('hidden');
+  const d = { id: nextDocId++, name: file.name, pdf: null, pages: [], index: [], pageWidth: 820 };
+  d.hue = HUES[(d.id - 1) % HUES.length];
+  d.pagesEl = document.createElement('div'); d.pagesEl.className = 'pages'; d.pagesEl.style.display = 'none';
+  reader.appendChild(d.pagesEl);
+  docs.push(d);
+  activateDoc(d);
+  setStatus(`Opening ${file.name}…`, 0);
+  const data = new Uint8Array(await file.arrayBuffer());
+  d.pdf = await pdfjsLib.getDocument({ data }).promise;
+  d.pageWidth = Math.max(320, Math.min(900, reader.clientWidth - 48));
+  for (let n = 1; n <= d.pdf.numPages; n++) {
+    const p = await d.pdf.getPage(n);
+    const [, , w, h] = p.view;
+    const el = document.createElement('div'); el.className = 'page'; el.dataset.n = n; el.dataset.doc = d.id;
+    const cssW = d.pageWidth, cssH = cssW * h / w;
+    el.style.width = cssW + 'px'; el.style.height = cssH + 'px';
+    el.innerHTML = `<div class="pageNo">Page ${n}</div><div class="ocrTag">queued</div><canvas></canvas><div class="ph">Page ${n}</div><div class="textLayer"></div><svg class="ovl"></svg>`;
+    d.pagesEl.appendChild(el);
+    d.pages.push({ doc: d, n, el, pdfPage: p, canvas: $('canvas', el), textLayer: $('.textLayer', el), ovl: $('.ovl', el), tag: $('.ocrTag', el), w, h, cssW, cssH, words: null, rendered: false, lines: [], ocrState: 'queued' });
+    observer.observe(el);
+  }
+  renderTabs();
+  setStatus(`${file.name}: ${d.pdf.numPages} pages · starting OCR`, 0);
+  runOcrQueue();
+}
+
+function activateDoc(d) {
+  if (doc === d) return;
+  doc = d; hideSelection();
+  docs.forEach(x => x.pagesEl.style.display = x === d ? '' : 'none');
+  reader.scrollTop = d.scrollTop || 0;
+  renderTabs(); renderTree(); scrollSpy();
+}
+function closeDoc(d) {
+  d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove();
+  docs.splice(docs.indexOf(d), 1);
+  ws.cards.filter(c => c.source?.docId === d.id).forEach(c => c.marker?.remove());
+  if (doc === d) { doc = null; if (docs[0]) activateDoc(docs[0]); else { renderTabs(); renderTree(); $('#drop').classList.remove('hidden'); } }
+  else renderTabs();
+}
+function renderTabs() {
+  const bar = $('#docTabs'); bar.innerHTML = '';
+  for (const d of docs) {
+    const t = document.createElement('div'); t.className = 'tab' + (d === doc ? ' active' : ''); t.style.setProperty('--dc', `hsl(${d.hue} 60% 45%)`);
+    const done = d.pages.filter(p => p.ocrState === 'done').length;
+    t.innerHTML = `<i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span><span class="st">${d.pages.length ? (done < d.pages.length ? `${done}/${d.pages.length}` : `${d.pages.length}p`) : '…'}</span><button class="cl" title="Close">×</button>`;
+    t.onclick = e => { if (e.target.closest('.cl')) closeDoc(d); else activateDoc(d); };
+    bar.appendChild(t);
+  }
+}
+reader.addEventListener('scroll', () => { if (doc) doc.scrollTop = reader.scrollTop; });
+
+// =====================================================================
+//  RENDERING (virtualised)
+// =====================================================================
+const observer = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const p = pageOf(e.target); if (!p) continue;
+    if (e.isIntersecting) { ensureRendered(p); p.priority = Date.now(); }
+    else if (p.rendered && Math.abs(e.boundingClientRect.top) > 4000) unrender(p);
+  }
+}, { root: $('#reader'), rootMargin: '1200px 0px' });
+
+async function ensureRendered(p) {
+  if (p.rendered || p.rendering) return p.renderPromise;
+  p.rendering = true;
+  p.renderPromise = (async () => {
+    const scale = (p.cssW / p.w) * Math.min(2, devicePixelRatio || 1);
+    const vp = p.pdfPage.getViewport({ scale });
+    p.canvas.width = vp.width; p.canvas.height = vp.height;
+    await p.pdfPage.render({ canvasContext: p.canvas.getContext('2d'), viewport: vp }).promise;
+    $('.ph', p.el)?.remove();
+    p.rendered = true; p.rendering = false;
+  })();
+  return p.renderPromise;
+}
+function unrender(p) { p.canvas.width = p.canvas.height = 0; p.rendered = false; }
+
+// =====================================================================
+//  OCR (auto, prioritised by what the user is looking at)
+// =====================================================================
+let tess = null;
+async function getWorker() {
+  if (tess) return tess;
+  setStatus('Loading OCR engine…');
+  tess = await Tesseract.createWorker('eng', 1, { logger: m => { if (m.status === 'recognizing text' && currentOcr) currentOcr.tag.textContent = `OCR ${Math.round(m.progress * 100)}%`; } });
+  return tess;
+}
+let currentOcr = null, ocrRunning = false;
+async function runOcrQueue() {
+  if (ocrRunning) return; ocrRunning = true;
+  while (true) {
+    const all = docs.flatMap(d => d.pages);
+    const pending = all.filter(p => p.ocrState === 'queued');
+    if (!pending.length) break;
+    // Prioritise: pages near the viewport, then the active document, then reading order
+    pending.sort((a, b) => (b.priority || 0) - (a.priority || 0) || (b.doc === doc) - (a.doc === doc) || a.doc.id - b.doc.id || a.n - b.n);
+    const p = pending[0];
+    currentOcr = p; p.ocrState = 'running'; p.tag.textContent = 'reading…'; p.tag.classList.add('busy');
+    try {
+      await extractPage(p);
+      p.ocrState = 'done'; p.tag.textContent = p.source === 'text' ? 'text layer' : `OCR ✓`; p.tag.classList.remove('busy');
+    } catch (err) { console.error(err); p.ocrState = 'error'; p.tag.textContent = 'OCR failed'; }
+    const done = all.filter(p => p.ocrState === 'done').length;
+    setStatus(`OCR ${done}/${all.length} pages${docs.length > 1 ? ` across ${docs.length} documents` : ''}`, done / all.length);
+    buildIndex(p.doc); renderTabs();
+  }
+  ocrRunning = false; currentOcr = null;
+  const all = docs.flatMap(d => d.pages);
+  setStatus(`${docs.length} document${docs.length > 1 ? 's' : ''} · ${all.length} pages · ${docs.reduce((s, d) => s + d.index.length, 0)} headings`, 1);
+}
+
+async function extractPage(p) {
+  // 1) born-digital text layer?
+  const tc = await p.pdfPage.getTextContent();
+  const digital = tc.items.filter(i => i.str.trim()).length > 8;
+  const words = [];
+  if (digital) {
+    p.source = 'text';
+    for (const it of tc.items) {
+      if (!it.str.trim()) continue;
+      const [a, b, c, d, e, f] = it.transform;        // e,f = baseline origin in PDF pts (y up)
+      const fontH = Math.hypot(b, d) || Math.abs(d) || 10;
+      const x = e / p.w, y = (p.h - f - fontH) / p.h, w = it.width / p.w, h = fontH / p.h;
+      // split the item into words to keep the lasso/selection granular
+      let cursor = 0; const parts = it.str.split(/(\s+)/);
+      for (const part of parts) {
+        if (part.trim()) words.push({ text: part, x: x + w * (cursor / it.str.length), y, w: w * (part.length / it.str.length), h });
+        cursor += part.length;
+      }
+    }
+  } else {
+    // 2) scanned → OCR a 2x render
+    p.source = 'ocr';
+    const worker = await getWorker();
+    const scale = 2;                                   // ~150 dpi for a 72pt page
+    const vp = p.pdfPage.getViewport({ scale });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    const { data } = await worker.recognize(c, {}, { text: true, blocks: true });
+    const ocrWords = data.words || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(pg => pg.lines.flatMap(l => l.words)));
+    for (const wd of ocrWords) {
+      if (!wd.text.trim() || wd.confidence < 30) continue;
+      const { x0, y0, x1, y1 } = wd.bbox;
+      words.push({ text: wd.text, x: x0 / vp.width, y: y0 / vp.height, w: (x1 - x0) / vp.width, h: (y1 - y0) / vp.height, conf: wd.confidence });
+    }
+  }
+  p.words = words;
+  p.lines = groupLines(words);
+  paintTextLayer(p);
+}
+
+// Hidden text layer: transparent spans positioned exactly over the glyphs
+function paintTextLayer(p) {
+  const tl = p.textLayer; tl.innerHTML = '';
+  const W = p.cssW, H = p.cssH;                 // fixed sizes, so this works for a document that is not currently shown
+  const frag = document.createDocumentFragment();
+  p.words.forEach((w, i) => {
+    const s = document.createElement('span');
+    s.textContent = w.text + ' ';
+    s.dataset.i = i;
+    const fs = Math.max(6, w.h * H * 0.9);
+    s.style.cssText = `left:${w.x * W}px; top:${w.y * H}px; font-size:${fs}px; height:${w.h * H}px;`;
+    frag.appendChild(s);
+    // horizontally fit the glyph box
+    requestAnimationFrame(() => { const tw = s.offsetWidth; if (tw) s.style.transform = `scaleX(${(w.w * W) / tw})`; });
+  });
+  tl.appendChild(frag);
+  applySearch(p);
+}
+
+// =====================================================================
+//  LINE GROUPING + AUTO-INDEX
+// =====================================================================
+function groupLines(words) {
+  const sorted = [...words].sort((a, b) => a.y - b.y || a.x - b.x);
+  const lines = [];
+  for (const w of sorted) {
+    const cy = w.y + w.h / 2;
+    const ln = lines.find(l => Math.abs(l.cy - cy) < Math.max(l.h, w.h) * 0.55);
+    if (ln) { ln.words.push(w); ln.cy = (ln.cy * (ln.words.length - 1) + cy) / ln.words.length; ln.h = Math.max(ln.h, w.h); }
+    else lines.push({ words: [w], cy, h: w.h });
+  }
+  for (const l of lines) {
+    l.words.sort((a, b) => a.x - b.x);
+    l.text = l.words.map(w => w.text).join(' ').replace(/\s+/g, ' ').trim();
+    l.x0 = Math.min(...l.words.map(w => w.x)); l.x1 = Math.max(...l.words.map(w => w.x + w.w));
+    l.y = Math.min(...l.words.map(w => w.y));
+  }
+  return lines.sort((a, b) => a.y - b.y);
+}
+
+const VOCAB = /^(INDEX|SYNOPSIS|LIST OF DATES|MEMO OF PARTIES|PLEADINGS?|GROUNDS?|PRAYERS?|INTERIM RELIEFS?|VERIFICATION|AFFIDAVIT|WRITTEN STATEMENT|REJOINDER|COUNTER[- ]?AFFIDAVIT|BRIEF FACTS|FACTS OF THE CASE|STATEMENT OF FACTS|ISSUES?|ARGUMENTS?|SUBMISSIONS?|CONCLUSIONS?|RELIEFS? SOUGHT|QUESTIONS? OF LAW|POINTS? FOR DETERMINATION)\b/i;
+
+// Each rule → { level, kind }.  Depth is unbounded: the stack builder nests by level number.
+const RULES = [
+  { re: /^(ANNEXURE|EXHIBIT|SCHEDULE|APPENDIX)\s*[-–:]?\s*[A-Z0-9][A-Z0-9\-\/]*/i, level: 1, kind: 'annex' },
+  { re: /^(PART|CHAPTER|VOLUME|TITLE)\s+([IVXLC]+|\d+|[A-Z])\b/i, level: 1 },
+  { re: /^([IVXLC]{1,6})[\.\)]\s+\S/, level: 2 },                 // I.  II.  III.
+  { re: /^([A-Z])[\.\)]\s+\S/, level: 3 },                         // A.  B.  C.
+  { re: /^(\d+)\.(\d+)\.(\d+)(\.\d+)*\.?\s+\S/, level: 5 },        // 1.1.1
+  { re: /^(\d+)\.(\d+)\.?\s+\S/, level: 4 },                      // 1.1
+  { re: /^\(([a-z])\)\s+\S/, level: 4 },                           // (a)
+  { re: /^\(([ivx]+)\)\s+\S/, level: 5 },                          // (i)
+  { re: /^(\d{1,3})\.\s+\S/, level: 4, needsShort: 55 },           // 1.  — only when it looks like a title, not a numbered paragraph
+];
+
+function detectHeadings(p) {
+  const out = [];
+  if (!p.lines.length) return out;
+  const hs = p.lines.map(l => l.h).sort((a, b) => a - b);
+  const medianH = hs[Math.floor(hs.length / 2)] || 0.01;
+  for (const l of p.lines) {
+    const t = l.text;
+    if (t.length < 2 || t.length > 90) continue;
+    if (/^\d{1,4}$/.test(t)) continue;                             // bare page numbers
+    if (/^\d{1,3}\.\s.+\s\d{1,4}$/.test(t) || /\.{3,}\s*\d{1,4}$/.test(t)) continue; // table-of-contents rows ("3. Pleadings 4")
+    if (/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b/.test(t)) continue;   // date-led lines (List of Dates rows) are not headings
+    const centred = Math.abs((l.x0 + l.x1) / 2 - 0.5) < 0.07 && (l.x1 - l.x0) < 0.7;
+    const caps = t.replace(/[^A-Za-z]/g, '').length > 3 && t === t.toUpperCase();
+    const big = l.h > medianH * 1.18;
+    const short = t.length <= 70;
+    let hit = null;
+    if (VOCAB.test(t) && short && (caps || centred || big)) hit = { level: 1, kind: 'section' };
+    if (!hit) for (const r of RULES) {
+      if (!r.re.test(t)) continue;
+      if (r.needsShort && t.length > r.needsShort) continue;
+      if (/[,;]$/.test(t)) continue;                               // wrapped paragraph line
+      if (!short && r.level >= 3) continue;
+      hit = { level: r.level, kind: r.kind || 'heading' }; break;
+    }
+    if (!hit && caps && short && (centred || big)) hit = { level: 1, kind: 'title' };
+    if (hit) out.push({ title: t, page: p.n, y: l.y, level: hit.level, kind: hit.kind, docId: p.doc.id });
+  }
+  return out;
+}
+
+function buildIndex(d) {
+  const flat = d.pages.filter(p => p.ocrState === 'done').flatMap(detectHeadings);
+  d.index = flat;
+  // Stack-based tree: unbounded depth, nests by level number
+  const root = { children: [] }, stack = [{ level: 0, node: root }];
+  for (const h of flat) {
+    const node = { ...h, children: [] };
+    while (stack.length > 1 && stack[stack.length - 1].level >= h.level) stack.pop();
+    stack[stack.length - 1].node.children.push(node);
+    node.depth = stack.length;
+    stack.push({ level: h.level, node });
+  }
+  d.tree = root;
+  if (d === doc) renderTree();
+}
+function renderTree() {                      // sidebar shows the active document's outline
+  const tree = $('#tree'); tree.innerHTML = '';
+  if (!doc) { tree.innerHTML = '<div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div>'; return; }
+  if (!doc.index.length) { tree.innerHTML = '<div id="indexEmpty">No headings detected yet…</div>'; return; }
+  const walk = (nodes) => nodes.forEach(nd => {
+    const a = document.createElement('a');
+    a.className = `node l${Math.min(6, nd.depth)} ${nd.kind === 'annex' ? 'annex' : ''}`;
+    a.innerHTML = `<span class="pg">p.${nd.page}</span>${escapeHtml(nd.title)}`;
+    a.title = nd.title;
+    a.onclick = () => scrollToPos(doc, nd.page, nd.y, true);
+    tree.appendChild(a);
+    walk(nd.children);
+  });
+  walk(doc.tree.children);
+  scrollSpy();
+}
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function headingAt(d, page, y) {            // nearest heading at/above a position → "¶ B." label
+  let best = null;
+  for (const h of d.index) if (h.page < page || (h.page === page && h.y <= y + 0.012)) best = h;
+  return best;
+}
+
+// scroll-spy: highlight the heading currently in view
+reader.addEventListener('scroll', () => { requestAnimationFrame(scrollSpy); });
+function scrollSpy() {
+  if (!doc || !doc.index.length) return;
+  const mid = reader.getBoundingClientRect().top + 120;
+  let cur = null;
+  for (const p of doc.pages) {
+    const r = p.el.getBoundingClientRect();
+    if (r.top > mid) break;
+    for (const h of doc.index) if (h.page === p.n && r.top + h.y * r.height <= mid) cur = h;
+  }
+  $$('#tree .node').forEach(n => n.classList.remove('current'));
+  const el = cur && $$('#tree .node').find(n => n.title === cur.title && n.textContent.includes(`p.${cur.page}`));
+  if (el) { el.classList.add('current'); el.scrollIntoView({ block: 'nearest' }); }
+}
+
+function scrollToPos(d, page, y, flash = false, bbox = null) {
+  if (!d) return;
+  activateDoc(d);                                     // switch tabs if the target is another document
+  const p = d.pages[page - 1]; if (!p) return;
+  const top = p.el.offsetTop + y * p.el.clientHeight - 24;
+  reader.scrollTo({ top, behavior: 'smooth' });
+  if (flash || bbox) {
+    const b = bbox || { x: 0.02, y: y - 0.004, w: 0.96, h: 0.03 };
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('class', 'flash'); r.setAttribute('x', b.x * 100 + '%'); r.setAttribute('y', b.y * 100 + '%');
+    r.setAttribute('width', b.w * 100 + '%'); r.setAttribute('height', b.h * 100 + '%'); r.setAttribute('rx', 4);
+    p.ovl.appendChild(r); setTimeout(() => r.remove(), 1700);
+  }
+}
+
+// =====================================================================
+//  SEARCH over the OCR layer
+// =====================================================================
+let query = '';
+$('#search').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  query = e.target.value.trim().toLowerCase();
+  const all = docs.flatMap(d => d.pages);
+  all.forEach(applySearch);
+  if (!query || !doc) return;
+  // search the active document first, then the others
+  const order = [...doc.pages, ...all.filter(p => p.doc !== doc)];
+  const hitPage = order.find(p => p.words?.some(w => w.text.toLowerCase().includes(query)));
+  if (hitPage) { const w = hitPage.words.find(w => w.text.toLowerCase().includes(query)); scrollToPos(hitPage.doc, hitPage.n, w.y, false, { x: w.x - 0.005, y: w.y - 0.005, w: w.w + 0.01, h: w.h + 0.01 }); setStatus(`Found "${query}" in ${hitPage.doc.name}, page ${hitPage.n}`); }
+  else setStatus(`"${query}" not found (in OCR'd pages)`);
+});
+function applySearch(p) {
+  if (!p.words) return;
+  $$('span', p.textLayer).forEach(s => s.classList.toggle('hit', !!query && p.words[+s.dataset.i].text.toLowerCase().includes(query)));
+}
+
+// =====================================================================
+//  TOOLS: hand / text select / lasso
+// =====================================================================
+$('#tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-tool]'); if (!b) return;
+  tool = b.dataset.tool;
+  $$('#tools .btn').forEach(x => x.classList.toggle('active', x === b));
+  reader.className = `tool-${tool}`;
+  hideSelection();
+});
+
+// ---- text selection → selection box
+document.addEventListener('selectionchange', () => {
+  if (tool !== 'select') return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const pageEl = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer.closest('.page') : range.commonAncestorContainer.parentElement.closest('.page');
+  if (!pageEl) return;
+  const p = pageOf(pageEl); if (!p) return;
+  const rects = [...range.getClientRects()]; if (!rects.length) return;
+  const pr = pageEl.getBoundingClientRect();
+  const x0 = Math.min(...rects.map(r => r.left)), y0 = Math.min(...rects.map(r => r.top));
+  const x1 = Math.max(...rects.map(r => r.right)), y1 = Math.max(...rects.map(r => r.bottom));
+  setSelection({ doc: p.doc, page: p.n, bbox: { x: (x0 - pr.left) / pr.width, y: (y0 - pr.top) / pr.height, w: (x1 - x0) / pr.width, h: (y1 - y0) / pr.height }, text: sel.toString().replace(/\s+/g, ' ').trim() });
+});
+
+// ---- lasso
+let lasso = null;
+reader.addEventListener('pointerdown', e => {
+  if (tool !== 'lasso') return;
+  const pageEl = e.target.closest('.page'); if (!pageEl) return;
+  const p = pageOf(pageEl); if (!p) return;
+  const pr = pageEl.getBoundingClientRect();
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('class', 'lasso');
+  p.ovl.appendChild(path);
+  lasso = { p, pr, pts: [], path };
+  p.ovl.setPointerCapture(e.pointerId);
+  hideSelection();
+  e.preventDefault();
+});
+reader.addEventListener('pointermove', e => {
+  if (!lasso) return;
+  const { pr } = lasso;
+  lasso.pts.push([(e.clientX - pr.left) / pr.width, (e.clientY - pr.top) / pr.height]);
+  lasso.path.setAttribute('d', 'M' + lasso.pts.map(([x, y]) => `${x * pr.width},${y * pr.height}`).join(' L') + ' Z');
+});
+reader.addEventListener('pointerup', e => {
+  if (!lasso) return;
+  const { p, pts, path } = lasso; lasso = null; path.remove();
+  if (pts.length < 5) return;
+  if (!p.words) { setStatus('This page has not been OCR\'d yet — wait a moment'); return; }
+  const inside = p.words.filter(w => pointInPoly([w.x + w.w / 2, w.y + w.h / 2], pts));
+  if (!inside.length) {
+    // nothing textual inside → still clip the region as an image
+    const xs = pts.map(a => a[0]), ys = pts.map(a => a[1]);
+    const bbox = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    if (bbox.w < 0.02 || bbox.h < 0.01) return;
+    setSelection({ doc: p.doc, page: p.n, bbox, text: '' });
+    return;
+  }
+  const x0 = Math.min(...inside.map(w => w.x)), y0 = Math.min(...inside.map(w => w.y));
+  const x1 = Math.max(...inside.map(w => w.x + w.w)), y1 = Math.max(...inside.map(w => w.y + w.h));
+  const lines = groupLines(inside);
+  setSelection({ doc: p.doc, page: p.n, bbox: { x: x0 - 0.004, y: y0 - 0.004, w: x1 - x0 + 0.008, h: y1 - y0 + 0.008 }, text: lines.map(l => l.text).join('\n') });
+  $$('span', p.textLayer).forEach(s => s.classList.toggle('inlasso', inside.includes(p.words[+s.dataset.i])));
+});
+function pointInPoly([x, y], poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// ---- selection box + chip (shared by text select and lasso)
+const selBox = $('#selBox'), selChip = $('#selChip');
+function setSelection(s) {
+  selection = s;
+  const p = s.doc.pages[s.page - 1];
+  const left = p.el.offsetLeft + s.bbox.x * p.el.clientWidth, top = p.el.offsetTop + s.bbox.y * p.el.clientHeight;
+  Object.assign(selBox.style, { display: 'block', left: left + 'px', top: top + 'px', width: s.bbox.w * p.el.clientWidth + 'px', height: s.bbox.h * p.el.clientHeight + 'px' });
+  Object.assign(selChip.style, { display: 'block', left: left + s.bbox.w * p.el.clientWidth / 2 + 'px', top: top + 'px' });
+}
+function hideSelection() {
+  selection = null; selBox.style.display = selChip.style.display = 'none';
+  $$('.textLayer span.inlasso').forEach(s => s.classList.remove('inlasso'));
+}
+selChip.addEventListener('click', e => { if (!dragMoved && selection) { addClippingAtViewCenter(selection); hideSelection(); } });
+
+// ---- drag the selection into the workspace (pointer-based, works with touch + pen)
+const ghost = $('#ghost'); let drag = null, dragMoved = false;
+for (const src of [selBox, selChip]) src.addEventListener('pointerdown', e => {
+  if (!selection) return;
+  drag = { sel: selection, sx: e.clientX, sy: e.clientY }; dragMoved = false;
+  src.setPointerCapture(e.pointerId);
+  ghost.textContent = selection.text ? selection.text.slice(0, 60) : `Image clip · page ${selection.page}`;
+  e.preventDefault();
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) dragMoved = true;
+  if (!dragMoved) return;
+  ghost.style.display = 'block'; ghost.style.left = e.clientX + 12 + 'px'; ghost.style.top = e.clientY + 12 + 'px';
+});
+document.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const d = drag; drag = null; ghost.style.display = 'none';
+  if (!dragMoved) return;
+  const r = wsEl.getBoundingClientRect();
+  if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+    const [cx, cy] = toCanvas(e.clientX, e.clientY);
+    addClipping(d.sel, cx - 160, cy - 20);
+    hideSelection();
+  }
+});
+
+// =====================================================================
+//  WORKSPACE: infinite canvas, cards, links, ink
+// =====================================================================
+const wsEl = $('#ws'), inner = $('#wsInner'), cardsEl = $('#cards'), edgesSvg = $('#edgesG'), inkSvg = $('#ink'), inkG = $('#inkG');
+const applyView = () => {
+  inner.style.transform = `translate(${ws.x}px, ${ws.y}px) scale(${ws.z})`;
+  const t = `translate(${ws.x} ${ws.y}) scale(${ws.z})`; edgesSvg.setAttribute('transform', t); inkG.setAttribute('transform', t);
+};
+applyView();
+const toCanvas = (cx, cy) => { const r = wsEl.getBoundingClientRect(); return [(cx - r.left - ws.x) / ws.z, (cy - r.top - ws.y) / ws.z]; };
+
+$('#wsBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-ws]'); if (!b) return;
+  ws.tool = b.dataset.ws; ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc'));
+  $$('#wsBar [data-ws]').forEach(x => x.classList.toggle('active', x === b));
+  wsEl.className = ws.tool === 'move' ? '' : ws.tool;
+});
+$('#fit').onclick = () => { ws.x = 40; ws.y = 40; ws.z = 1; applyView(); };
+$('#addNote').onclick = () => { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addCard({ type: 'note', x: x - 140, y: y - 60, note: '' }).querySelector('.note').focus(); };
+$('#undoInk').onclick = () => { const s = ws.strokes.pop(); s?.el.remove(); };
+$('#exportWs').onclick = () => {
+  const data = { documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length })), cards: ws.cards.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, w: c.w, text: c.text, note: $('.note', c.el).innerText, source: c.source })), edges: ws.edges.map(e => ({ from: e.from, to: e.to, label: e.label })), strokes: ws.strokes.map(s => s.pts) };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); a.download = 'workspace.json'; a.click();
+};
+
+// pan / zoom
+wsEl.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    const [cx, cy] = toCanvas(e.clientX, e.clientY);
+    const z = Math.min(3, Math.max(0.25, ws.z * (e.deltaY < 0 ? 1.1 : 0.9)));
+    const r = wsEl.getBoundingClientRect();
+    ws.x = e.clientX - r.left - cx * z; ws.y = e.clientY - r.top - cy * z; ws.z = z;
+  } else { ws.x -= e.deltaX; ws.y -= e.deltaY; }
+  applyView();
+}, { passive: false });
+let pan = null, pinch = null; const touches = new Map();
+wsEl.addEventListener('pointerdown', e => {
+  if (e.target.closest('.card')) return;
+  if (ws.tool === 'pen' && e.pointerType !== 'touch') return;      // ink handled below (pen/mouse); fingers pan
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: ws.z }; pan = null; return; }
+  pan = { sx: e.clientX, sy: e.clientY, ox: ws.x, oy: ws.y }; wsEl.setPointerCapture(e.pointerId);
+  if (ws.tool === 'link') { ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc')); }
+  selectCard(null);
+});
+wsEl.addEventListener('pointermove', e => {
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch && touches.size === 2) {
+    const [a, b] = [...touches.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const z = Math.min(3, Math.max(0.25, pinch.z * d / pinch.d)); const r = wsEl.getBoundingClientRect();
+    const mx = (a[0] + b[0]) / 2 - r.left, my = (a[1] + b[1]) / 2 - r.top;
+    const [cx, cy] = [(mx - ws.x) / ws.z, (my - ws.y) / ws.z]; ws.x = mx - cx * z; ws.y = my - cy * z; ws.z = z; applyView(); return;
+  }
+  if (!pan) return;
+  ws.x = pan.ox + e.clientX - pan.sx; ws.y = pan.oy + e.clientY - pan.sy; applyView();
+});
+const endPan = e => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; pan = null; };
+wsEl.addEventListener('pointerup', endPan); wsEl.addEventListener('pointercancel', endPan);
+
+// ink (pen / mouse in Pen mode)
+let stroke = null;
+inkSvg.addEventListener('pointerdown', e => {
+  if (ws.tool !== 'pen' || e.pointerType === 'touch') return;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  inkG.appendChild(path); inkSvg.setPointerCapture(e.pointerId);
+  stroke = { pts: [], el: path, width: 2.2 };
+  addInkPoint(e); e.preventDefault();
+});
+inkSvg.addEventListener('pointermove', e => { if (stroke) { addInkPoint(e); } });
+const endStroke = () => { if (stroke) { ws.strokes.push(stroke); stroke = null; } };
+inkSvg.addEventListener('pointerup', endStroke); inkSvg.addEventListener('pointercancel', endStroke);
+function addInkPoint(e) {
+  const [x, y] = toCanvas(e.clientX, e.clientY);
+  stroke.pts.push([x, y]);
+  const pr = e.pressure && e.pressure !== 0.5 ? e.pressure : 0.6;
+  stroke.el.setAttribute('stroke-width', (1 + pr * 3).toFixed(2));
+  stroke.el.setAttribute('d', stroke.pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
+}
+
+// ---- cards
+async function addClipping(sel, x, y) {
+  const d = sel.doc, p = d.pages[sel.page - 1];
+  await ensureRendered(p);
+  const { x: bx, y: by, w: bw, h: bh } = sel.bbox;
+  const c = document.createElement('canvas');
+  const sx = Math.max(0, bx * p.canvas.width), sy = Math.max(0, by * p.canvas.height);
+  const sw = Math.min(p.canvas.width - sx, bw * p.canvas.width), sh = Math.min(p.canvas.height - sy, bh * p.canvas.height);
+  c.width = Math.max(1, sw); c.height = Math.max(1, sh);
+  c.getContext('2d').drawImage(p.canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const h = headingAt(d, sel.page, sel.bbox.y);
+  const card = addCard({ type: 'clipping', x, y, img: c.toDataURL('image/png'), text: sel.text, source: { docId: d.id, docName: d.name, hue: d.hue, page: sel.page, bbox: sel.bbox, heading: h ? h.title : null } });
+  addMarker(card);
+  return card;
+}
+function addClippingAtViewCenter(sel) { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addClipping(sel, x - 160 + (ws.cards.length % 5) * 24, y - 80 + (ws.cards.length % 5) * 24); }
+
+function addCard(spec) {
+  const id = ws.nextId++;
+  const el = document.createElement('div');
+  el.className = 'card' + (spec.type === 'note' ? ' noteCard' : ''); el.dataset.id = id;
+  el.style.left = spec.x + 'px'; el.style.top = spec.y + 'px'; if (spec.w) el.style.width = spec.w + 'px';
+  if (spec.source) el.style.setProperty('--dc', `hsl(${spec.source.hue} 60% 42%)`);   // colour-code by source document
+  const srcLabel = spec.source ? `p.${spec.source.page}${spec.source.heading ? ' · ' + spec.source.heading.slice(0, 28) : ''}` : '';
+  const docLabel = spec.source ? shortName(spec.source.docName) : '';
+  el.innerHTML = `
+    <div class="hd">${spec.source ? `<span class="src" title="Jump to source in ${escapeHtml(spec.source.docName)}"><b class="dn">${escapeHtml(docLabel)}</b> ↩ ${escapeHtml(srcLabel)}</span>` : `<span class="tag">Note</span>`}<button class="x" title="Delete">×</button></div>
+    ${spec.img ? `<img class="crop" src="${spec.img}" draggable="false">` : ''}
+    ${spec.text ? `<div class="txt">${escapeHtml(spec.text)}</div>` : ''}
+    <div class="note" contenteditable="true" data-ph="${spec.type === 'note' ? 'Type a note…' : 'Add a note to this clipping…'}">${escapeHtml(spec.note || '')}</div>
+    <div class="rz"></div>`;
+  cardsEl.appendChild(el);
+  const card = { id, el, type: spec.type, x: spec.x, y: spec.y, w: spec.w || 320, text: spec.text || '', source: spec.source || null };
+  ws.cards.push(card);
+
+  // header drag / link / select
+  const hd = $('.hd', el); let mv = null;
+  hd.addEventListener('pointerdown', e => {
+    if (e.target.closest('.x, .src')) return;
+    if (ws.tool === 'link') { linkClick(card); return; }
+    mv = { sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y }; hd.setPointerCapture(e.pointerId); selectCard(card); e.preventDefault();
+  });
+  hd.addEventListener('pointermove', e => { if (!mv) return; card.x = mv.ox + (e.clientX - mv.sx) / ws.z; card.y = mv.oy + (e.clientY - mv.sy) / ws.z; el.style.left = card.x + 'px'; el.style.top = card.y + 'px'; drawEdges(); });
+  hd.addEventListener('pointerup', () => mv = null);
+  el.addEventListener('pointerdown', e => { if (ws.tool === 'link' && !e.target.closest('.hd')) { linkClick(card); e.preventDefault(); } else if (!e.target.closest('.hd')) selectCard(card); }, true);
+  $('.x', el).onclick = () => removeCard(card);
+  $('.src', el)?.addEventListener('click', () => {
+    const d = docById(card.source.docId);
+    if (!d) { setStatus(`${card.source.docName} is closed — reopen it to jump to page ${card.source.page}`); return; }
+    scrollToPos(d, card.source.page, card.source.bbox.y, false, card.source.bbox);
+  });
+  // resize
+  const rz = $('.rz', el); let rs = null;
+  rz.addEventListener('pointerdown', e => { rs = { sx: e.clientX, ow: el.offsetWidth }; rz.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); });
+  rz.addEventListener('pointermove', e => { if (!rs) return; card.w = Math.max(160, rs.ow + (e.clientX - rs.sx) / ws.z); el.style.width = card.w + 'px'; drawEdges(); });
+  rz.addEventListener('pointerup', () => rs = null);
+  return el;
+}
+const shortName = n => n.replace(/\.pdf$/i, '').slice(0, 18);
+function selectCard(card) { ws.selected = card; $$('.card').forEach(c => c.classList.toggle('selected', card && c === card.el)); }
+function removeCard(card) {
+  ws.cards = ws.cards.filter(c => c !== card); ws.edges = ws.edges.filter(e => e.from !== card.id && e.to !== card.id);
+  card.el.remove(); card.marker?.remove(); drawEdges();
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  if (e.target.closest('[contenteditable], input')) return;
+  if (ws.selected) removeCard(ws.selected);
+  else if (selectedEdge) { ws.edges = ws.edges.filter(x => x !== selectedEdge); selectedEdge = null; drawEdges(); }
+});
+
+// margin marker on the PDF page → jump to the card
+function addMarker(cardEl) {
+  const card = ws.cards.find(c => c.el === cardEl); const p = docById(card.source.docId).pages[card.source.page - 1];
+  const m = document.createElement('div'); m.className = 'marker'; m.title = 'Show in workspace';
+  m.style.background = `hsl(${card.source.hue} 60% 42%)`;
+  m.style.top = card.source.bbox.y * 100 + '%';
+  m.onclick = () => { const r = wsEl.getBoundingClientRect(); ws.x = r.width / 2 - (card.x + card.el.offsetWidth / 2) * ws.z; ws.y = r.height / 2 - (card.y + card.el.offsetHeight / 2) * ws.z; applyView(); selectCard(card); };
+  p.el.appendChild(m); card.marker = m;
+}
+
+// ---- links between cards
+function linkClick(card) {
+  if (!ws.linkSrc) { ws.linkSrc = card; card.el.classList.add('linkSrc'); return; }
+  if (ws.linkSrc !== card) ws.edges.push({ id: ws.nextId++, from: ws.linkSrc.id, to: card.id, label: '' });
+  ws.linkSrc.el.classList.remove('linkSrc'); ws.linkSrc = null; drawEdges();
+}
+let selectedEdge = null;
+function drawEdges() {
+  $$('g', edgesSvg).forEach(g => g.remove());
+  for (const e of ws.edges) {
+    const a = ws.cards.find(c => c.id === e.from), b = ws.cards.find(c => c.id === e.to); if (!a || !b) continue;
+    const ac = [a.x + a.el.offsetWidth / 2, a.y + a.el.offsetHeight / 2], bc = [b.x + b.el.offsetWidth / 2, b.y + b.el.offsetHeight / 2];
+    const pa = edgePoint(a, bc), pb = edgePoint(b, ac);
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    if (selectedEdge === e) g.setAttribute('class', 'sel');
+    const mx = (pa[0] + pb[0]) / 2, my = (pa[1] + pb[1]) / 2;
+    g.innerHTML = `<line x1="${pa[0]}" y1="${pa[1]}" x2="${pb[0]}" y2="${pb[1]}" marker-end="url(#arrow)"/><text x="${mx}" y="${my - 6}" text-anchor="middle" class="${e.label ? '' : 'ph'}">${escapeHtml(e.label || '+ label')}</text>`;
+    $('line', g).onclick = () => { selectedEdge = selectedEdge === e ? null : e; selectCard(null); drawEdges(); };
+    $('text', g).onclick = () => editEdgeLabel(e, mx, my);
+    edgesSvg.appendChild(g);
+  }
+}
+function editEdgeLabel(e, mx, my) {       // inline editor instead of prompt(): works on tablets, never blocks
+  const r = wsEl.getBoundingClientRect();
+  const inp = document.createElement('input'); inp.className = 'edgeEdit'; inp.value = e.label; inp.placeholder = 'contradicts / supports / see also';
+  inp.style.left = (r.left + ws.x + mx * ws.z - 80) + 'px'; inp.style.top = (r.top + ws.y + my * ws.z - 30) + 'px';
+  document.body.appendChild(inp); inp.focus(); inp.select();
+  const done = () => { e.label = inp.value.trim(); inp.remove(); drawEdges(); };
+  inp.onblur = done; inp.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === 'Escape') inp.blur(); };
+}
+function edgePoint(card, toward) {        // point on the card's border in the direction of `toward`
+  const w = card.el.offsetWidth, h = card.el.offsetHeight, cx = card.x + w / 2, cy = card.y + h / 2;
+  const dx = toward[0] - cx, dy = toward[1] - cy; if (!dx && !dy) return [cx, cy];
+  const s = Math.min(Math.abs(w / 2 / (dx || 1e-6)), Math.abs(h / 2 / (dy || 1e-6)));
+  return [cx + dx * s, cy + dy * s];
+}
+
+// =====================================================================
+//  split divider
+// =====================================================================
+const divider = $('#divider'), readerWrap = $('#readerWrap'); let dv = null;
+divider.addEventListener('pointerdown', e => { dv = { sx: e.clientX, w: readerWrap.offsetWidth }; divider.setPointerCapture(e.pointerId); });
+divider.addEventListener('pointermove', e => { if (!dv) return; const w = Math.max(300, dv.w + e.clientX - dv.sx); readerWrap.style.flex = `0 0 ${w}px`; });
+divider.addEventListener('pointerup', () => dv = null);
+</script>
+</body>
+</html>

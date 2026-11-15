@@ -23,8 +23,8 @@ source location.**
 | Web           | PWA (installable)                | Zero install, works today |
 | iPad          | Capacitor (WKWebView) → App Store | Native Apple Pencil pressure/tilt via PointerEvents; file picker; iCloud |
 | Android tab   | Capacitor (WebView) → Play Store  | Same code, stylus via PointerEvents |
-| macOS         | Tauri 2 (or Mac Catalyst of the iPad app) | Small binary, native menus, file system |
-| Windows       | Tauri 2                          | Same as macOS |
+| macOS         | Electron now, Tauri 2 later      | Same shell as Windows |
+| Windows       | **Electron** (built in `desktop/`) | Chosen for Phase 0/1 because it needs only Node; Tauri 2 would give a smaller binary but needs the Rust + MSVC toolchain. The renderer is identical, so the swap is contained to the shell |
 
 Everything the lawyer touches is the same React app. Only the shell differs.
 Pencil / stylus input is handled by the web PointerEvents API (`pointerType === "pen"`,
@@ -150,6 +150,15 @@ Infinite canvas (tldraw). Node types:
 - Split view is resizable; on iPad the workspace can also be a full-screen tab; on phones (not a target) it collapses.
 - Everything is **bi-directional**: the left pane shows a small margin marker where clippings
   were taken from; tapping it jumps to the clipping in the workspace.
+
+## 7a. Persistence and the `.lawcase` file
+
+- **Autosave** to IndexedDB (web and desktop) after every change, so a reload or crash loses nothing.
+- **Case file** `*.lawcase`: a ZIP containing `case.json` (documents, workspaces, cards, links, ink, view state),
+  the original PDFs, the OCR layers (so a case never needs re-OCR), the PDF mark-up, and the clipping images.
+  Full layout in [docs/SPEC-case-file.md](docs/SPEC-case-file.md). The desktop build registers the extension.
+- A case holds **many workspaces**, each with a title and a **master index**: every document's outline with the
+  workspace's clippings listed under the headings they came from.
 
 ## 8. Data model (simplified)
 

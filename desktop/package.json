@@ -1,0 +1,62 @@
+{
+  "name": "casecanvas-desktop",
+  "productName": "Case Canvas",
+  "version": "0.1.0",
+  "description": "Case Canvas desktop shell",
+  "main": "main.js",
+  "author": "Stuthi Labs Private Limited",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.stuthilabs.casecanvas",
+    "productName": "Case Canvas",
+    "copyright": "Copyright © 2026 Stuthi Labs Private Limited",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../prototype",
+        "to": "prototype",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "fileAssociations": [
+      {
+        "ext": "lawcase",
+        "name": "Case Canvas case",
+        "description": "Case Canvas case file",
+        "role": "Editor"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "png-to-ico": "^3.0.2"
+  }
+}

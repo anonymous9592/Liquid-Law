@@ -11,6 +11,8 @@ and a side-by-side workspace where lassoed regions become linked, annotatable ca
 | [prototype/sample/scanned_petition.pdf](prototype/sample/scanned_petition.pdf) | A fabricated 9-page *image-only* writ petition used to test OCR and indexing |
 | [prototype/sample/scanned_counter.pdf](prototype/sample/scanned_counter.pdf) | The State's 4-page counter to it, for cross-document linking |
 | [tools/make_sample_pdf.py](tools/make_sample_pdf.py) | Regenerates both sample PDFs (needs `pip install pillow`) |
+| [docs/SPEC-case-file.md](docs/SPEC-case-file.md) | The `.lawcase` file format, autosave rules, multi-workspace and master-index behaviour, and the renderer ↔ desktop bridge |
+| [desktop/](desktop/README.md) | The Windows app (Electron shell around the same renderer): `npm start` to run, `npm run build:win` to build the installer and portable exe into `desktop/dist/` |
 
 ## Run the prototype
 
@@ -38,7 +40,17 @@ Nothing leaves the browser: PDF.js renders, Tesseract.js OCRs in a Web Worker.
   numbering rules (PART I, I., A., 1.1.1, (a), (i), ANNEXURE P-1) and legal vocabulary
   (PRAYER, PLEADINGS, GROUNDS, SYNOPSIS…), then nested to any depth. The sidebar scroll-spies
   as you read; clicking jumps to the heading.
-- **Infinite-scroll canvas**: all pages in one vertical scroll, virtualised.
+- **Horizontal reading board**: pages sit side by side on a whiteboard and scroll sideways
+  (mouse wheel, trackpad or the filmstrip), like a normal PDF scroll turned on its side.
+  There is no vertical mode.
+- **Export document as PDF** (toolbar ⬇ or *Case ▾ → Export document as PDF…*): writes the
+  original pages with your pen marks, highlights and sticky notes burned in, plus an
+  invisible text layer from the OCR so the exported file is searchable in any PDF reader. A **filmstrip** of page previews slides up from the bottom
+  edge on hover (click its handle to pin it) and the current page is marked.
+- **PDF mark-up toolbar** floating on the page pane: pen (colours, three widths),
+  highlighter (free-hand, or select text and press *highlight* on the chip for clean
+  line-by-line highlights), sticky notes, eraser, undo. Marks are stored per page in
+  page-relative units so they survive zoom and view changes, and go into the JSON export.
 - **Lasso / text select → workspace**: lasso a region (pen, finger or mouse) or select
   text, then drag it across the divider. The card carries the image crop, the OCR text,
   and a source badge ("p.4 · A. Brief facts of the case") that jumps back and flashes the
@@ -48,8 +60,18 @@ Nothing leaves the browser: PDF.js renders, Tesseract.js OCRs in a Web Worker.
   JSON export of the whole workspace.
 - **Find**: searches the OCR layer and highlights hits.
 
+- **Stateful.** Everything autosaves to the browser's IndexedDB within a second of a
+  change and is restored on the next launch, including OCR results (no re-OCR), mark-up,
+  workspaces, cards, links, ink, view mode and scroll positions.
+- **Case files.** *Case ▾ → Save / Save as…* writes a single `.lawcase` file (a ZIP with the
+  PDFs, OCR layers, mark-up, workspaces and clipping images). *Open…* loads one. On Windows
+  the app registers the extension, so double-clicking a `.lawcase` opens it.
+- **Multiple workspaces per case**, each with its own title (double-click to rename), and a
+  **Master index** tab in the sidebar: every document's outline with that workspace's
+  clippings listed under the headings they came from, with a filter box.
+
 ## What the prototype deliberately leaves out
 
-Persistence across reloads, cloud OCR, user correction of the index, and the native
-shells (Capacitor / Tauri). Those are Phase 1–2 in
+Cloud OCR, user correction of the index, sync between devices, and the tablet shells
+(Capacitor). Those are Phase 1–2 in
 [ARCHITECTURE.md](ARCHITECTURE.md).

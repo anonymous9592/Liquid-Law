@@ -4,7 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Case Canvas — prototype</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml" />
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f3f1ec; --panel: #ffffff; --ink: #1f1d1a; --muted: #7a7570; --line: #e2ded6;
@@ -18,9 +21,10 @@
 
   /* ---------- top bar ---------- */
   #top { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  #top .brand { font-weight: 700; letter-spacing: .2px; margin-right: 8px; }
+  #top .brand { font-weight: 700; letter-spacing: .2px; margin-right: 8px; display: inline-flex; align-items: center; gap: 7px; }
+  #top .brand .logo { width: 22px; height: 22px; }
   #top .brand span { color: var(--accent); }
-  .btn { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
   .btn:hover { background: #f7f5f0; }
   .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn.small { padding: 3px 8px; font-size: 12px; }
@@ -31,6 +35,39 @@
   #bar { width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
   #bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
   #search { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 180px; }
+
+  /* ---------- case menu + title + save indicator ---------- */
+  #caseMenuWrap { position: relative; }
+  #caseMenu { position: absolute; top: 38px; left: 0; z-index: 60; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 4px; min-width: 200px; display: none; }
+  #caseMenu.show { display: block; }
+  #caseMenu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; border: 0; background: transparent; padding: 7px 10px; border-radius: 6px; cursor: pointer; text-align: left; color: var(--ink); }
+  #caseMenu button:hover { background: #f3f1ec; }
+  #caseMenu kbd { color: var(--muted); font: 11px/1.6 inherit; }
+  #caseMenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+  #caseTitle { border: 1px solid transparent; background: transparent; font: 600 14px/1.2 inherit; padding: 5px 6px; border-radius: 6px; width: 220px; min-width: 80px; text-overflow: ellipsis; color: var(--ink); }
+  #caseTitle:hover { border-color: var(--line); }
+  #caseTitle:focus { border-color: var(--accent); outline: none; background: #fff; }
+  #saveInd { font-size: 11px; color: var(--muted); white-space: nowrap; min-width: 96px; }
+  #saveInd.dirty { color: var(--accent); }
+  #saveInd.err { color: #c0392b; }
+
+  /* ---------- sidebar tabs + master index ---------- */
+  #sideTabs { display: flex; gap: 2px; margin: -4px -4px 8px; border-bottom: 1px solid var(--line); }
+  #sideTabs button { flex: 1; border: 0; background: transparent; padding: 7px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  #sideTabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  #masterFilter { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; margin-bottom: 8px; font: 12px inherit; }
+  .mGroup { margin-bottom: 6px; --dc: var(--accent); }
+  .mHead { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; user-select: none; }
+  .mHead:hover { background: #f3f1ec; }
+  .mHead i { width: 9px; height: 9px; border-radius: 50%; background: var(--dc); flex: none; }
+  .mHead .tw { color: var(--muted); font-size: 9px; width: 9px; flex: none; }
+  .mHead .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .mHead .ct { font-weight: 400; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .mGroup.collapsed .mBody { display: none; }
+  .node .badge { float: right; min-width: 16px; text-align: center; background: var(--dc, var(--accent)); color: #fff; border-radius: 999px; font-size: 10px; line-height: 16px; padding: 0 5px; margin-left: 4px; font-weight: 600; }
+  .mClip { display: block; padding: 2px 6px 2px 8px; font-size: 12px; color: #3b3732; cursor: pointer; border-left: 2px solid var(--dc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 0 4px 4px 0; font-family: Georgia, "Times New Roman", serif; margin: 1px 0; }
+  .mClip:hover { background: #f3f1ec; }
+  .mEmpty { color: var(--muted); font-size: 12px; padding: 3px 6px 3px 22px; }
 
   /* ---------- layout ---------- */
   #main { display: flex; height: calc(100% - 48px); }
@@ -59,10 +96,58 @@
   .tab .st { color: var(--muted); font-weight: 400; }
   .tab .cl { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
   .tab .cl:hover { color: var(--accent); }
+  #readerWrap { position: relative; }
   #reader { flex: 1; overflow: auto; position: relative; background: #e9e6df; touch-action: pan-y pinch-zoom; }
-  #reader.tool-lasso, #reader.tool-select { touch-action: none; }
+  #reader.tool-lasso, #reader.tool-select, #reader.tool-pen, #reader.tool-hl, #reader.tool-erase { touch-action: none; }
   .pages { padding: 20px 0 80px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
   .page { position: relative; background: #fff; box-shadow: var(--shadow); }
+
+  /* ---------- board view: horizontal, overlapping pages on a whiteboard ---------- */
+  #reader.board { touch-action: pan-x pinch-zoom; background: #fbfbf9;
+    background-image: linear-gradient(rgba(40,40,60,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(40,40,60,.045) 1px, transparent 1px);
+    background-size: 40px 40px; box-shadow: inset 0 0 120px rgba(0,0,0,.06); }
+  #reader.board .pages { flex-direction: row; align-items: center; gap: 28px; width: max-content; min-width: 100%; height: 100%; padding: 36px 60px 110px 60px; }
+  #reader.board .page { flex: none; box-shadow: 0 6px 20px rgba(0,0,0,.14), 0 1px 3px rgba(0,0,0,.1); }
+  #reader.board .pageNo, #reader.board .ocrTag { top: auto; bottom: -18px; }
+
+  /* ---------- floating PDF toolbar ---------- */
+  #pdfTools { position: absolute; right: 14px; top: 46px; z-index: 12; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: rgba(255,255,255,.96);
+    border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); backdrop-filter: blur(6px); }
+  #pdfTools .tb { width: 34px; height: 34px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; font-size: 16px; display: grid; place-items: center; color: var(--ink); }
+  #pdfTools .tb:hover { background: #f1eee8; }
+  #pdfTools .tb.active { background: var(--accent); color: #fff; }
+  #pdfTools hr { width: 24px; border: 0; border-top: 1px solid var(--line); margin: 3px auto; }
+  #toolPop { position: absolute; right: 50px; top: 46px; z-index: 12; display: none; gap: 6px; align-items: center; padding: 6px 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  #toolPop.show { display: flex; }
+  #toolPop .sw { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ccc; cursor: pointer; }
+  #toolPop .sw.on { box-shadow: 0 0 0 2px var(--ink); }
+  #toolPop .wd { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: grid; place-items: center; cursor: pointer; }
+  #toolPop .wd.on { border-color: var(--ink); background: #f1eee8; }
+  #toolPop .wd i { display: block; background: var(--ink); border-radius: 99px; width: 14px; }
+
+  /* ---------- annotation layer ---------- */
+  .anno { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .anno path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .anno .hl { mix-blend-mode: multiply; }
+  .tool-pen .ovl, .tool-hl .ovl, .tool-erase .ovl, .tool-note .ovl { pointer-events: auto; }
+  .tool-pen .ovl { cursor: crosshair; } .tool-hl .ovl { cursor: text; } .tool-erase .ovl { cursor: cell; } .tool-note .ovl { cursor: copy; }
+  .tool-pen .textLayer, .tool-hl .textLayer, .tool-erase .textLayer, .tool-note .textLayer { pointer-events: none; user-select: none; }
+  .sticky { position: absolute; width: 170px; min-height: 60px; background: #fff6a8; box-shadow: 0 3px 10px rgba(0,0,0,.2); border-radius: 4px; z-index: 3; font-size: 12px; }
+  .sticky .sh { display: flex; justify-content: space-between; padding: 2px 6px; background: #f3e27a; cursor: grab; font-size: 11px; color: #6b5d00; border-radius: 4px 4px 0 0; user-select: none; }
+  .sticky .sx { cursor: pointer; }
+  .sticky .sb { padding: 6px 8px; min-height: 40px; outline: none; white-space: pre-wrap; }
+  .sticky .sb:empty::before { content: "Note…"; color: #a89b45; }
+
+  /* ---------- bottom filmstrip of page previews ---------- */
+  #strip { position: absolute; left: 0; right: 0; bottom: 0; z-index: 11; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); backdrop-filter: blur(6px); transition: height .18s ease; height: 18px; overflow: hidden; }
+  #strip:hover, #strip.pinned { height: 124px; }
+  #strip .handle { height: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--muted); cursor: pointer; user-select: none; }
+  #strip .handle i { width: 36px; height: 4px; border-radius: 2px; background: #cfc9bf; }
+  #thumbs { display: flex; gap: 8px; padding: 4px 12px 8px; overflow-x: auto; }
+  .thumb { flex: none; height: 88px; border: 2px solid transparent; border-radius: 4px; background: #fff; box-shadow: var(--shadow); cursor: pointer; position: relative; }
+  .thumb canvas { display: block; height: 100%; }
+  .thumb.current { border-color: var(--accent); }
+  .thumb span { position: absolute; right: 2px; bottom: 2px; font-size: 10px; background: rgba(0,0,0,.6); color: #fff; border-radius: 3px; padding: 0 4px; }
   .page canvas { display: block; width: 100%; height: 100%; }
   .page .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
   .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; }
@@ -90,6 +175,10 @@
 
   /* ---------- workspace ---------- */
   #wsWrap { flex: 1 1 50%; min-width: 300px; display: flex; flex-direction: column; background: var(--ws-bg); }
+  #wsTabs { display: flex; gap: 4px; padding: 6px 8px 0; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; min-height: 34px; align-items: flex-end; flex: none; }
+  #wsTabs .tab { --dc: var(--accent); }
+  #wsTabs .tab input { font: inherit; width: 130px; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
+  #wsTabs .tab.add { background: transparent; border-style: dashed; color: var(--muted); font-weight: 600; }
   #wsBar { height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #wsBar .title { font-weight: 600; margin-right: 6px; }
   #ws { flex: 1; position: relative; overflow: hidden; touch-action: none; background-image: radial-gradient(#d8d3c8 1px, transparent 1px); background-size: 24px 24px; cursor: grab; }
@@ -120,7 +209,7 @@
   .card .hd .x { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
   .card .crop { display: block; width: 100%; background: #fff; border-bottom: 1px solid var(--line); }
   .card .txt { padding: 8px 10px; font-size: 13px; color: #3b3732; max-height: 140px; overflow: auto; white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif; }
-  .card .note { padding: 8px 10px; min-height: 48px; outline: none; font-size: 13px; }
+  .card .note { padding: 8px 10px; min-height: 48px; outline: none; font-size: 13px; white-space: pre-wrap; }
   .card .note:empty::before { content: attr(data-ph); color: var(--muted); }
   .card.noteCard .note { min-height: 100px; font-size: 14px; }
   .card .rz { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #cfc9bf 50%); }
@@ -137,22 +226,33 @@
 </head>
 <body>
 <div id="top">
-  <div class="brand">Case <span>Canvas</span></div>
-  <label class="btn">📄 Open PDF(s) <input id="file" type="file" accept="application/pdf" multiple hidden></label>
+  <div class="brand"><img src="logo.svg" alt="" class="logo">Case <span>Canvas</span></div>
+  <div id="caseMenuWrap">
+    <button class="btn" id="caseBtn" title="Case file">📁 Case ▾</button>
+    <div id="caseMenu">
+      <button data-case="new">New case</button>
+      <button data-case="open">Open…<kbd>Ctrl+O</kbd></button>
+      <hr>
+      <button data-case="save">Save<kbd>Ctrl+S</kbd></button>
+      <button data-case="saveAs">Save as…<kbd>Ctrl+Shift+S</kbd></button>
+      <hr>
+      <button data-case="exportPdf">Export document as PDF…</button>
+    </div>
+    <input id="caseFile" type="file" accept=".lawcase" hidden>
+  </div>
+  <input id="caseTitle" value="Untitled case" title="Case title — click to edit" spellcheck="false" />
+  <span id="saveInd">Saved</span>
+  <button class="btn" id="openPdfBtn">📄 Open PDF(s)</button><input id="file" type="file" accept="application/pdf" multiple hidden>
   <button class="btn" id="loadSample">Sample: Petition</button>
   <button class="btn" id="loadSample2">Sample: Counter</button>
-  <div class="seg" id="tools">
-    <button class="btn active" data-tool="hand" title="Scroll / pan">✋ Hand</button>
-    <button class="btn" data-tool="select" title="Select text">⌶ Text</button>
-    <button class="btn" data-tool="lasso" title="Lasso a region">⭕ Lasso</button>
-  </div>
   <input id="search" placeholder="Find in document…" />
   <div id="status"><span id="statusTxt">No document</span><div id="bar"><i></i></div></div>
 </div>
 
 <div id="main">
   <aside id="index">
-    <h3>Index</h3>
+    <div id="sideTabs"><button data-side="doc" class="active">Document</button><button data-side="master">Master index</button></div>
+    <input id="masterFilter" placeholder="Filter headings &amp; clippings…" hidden />
     <div id="tree"><div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div></div>
   </aside>
 
@@ -160,15 +260,33 @@
     <div id="docTabs"></div>
     <div id="reader" class="tool-hand">
       <div id="selBox"></div>
-      <div id="selChip">Drag into workspace → &nbsp;or&nbsp; <b>click to send</b></div>
+      <div id="selChip">Drag into workspace → &nbsp;or&nbsp; <b>click to send</b> &nbsp;·&nbsp; <span id="chipHl" title="Highlight this">🖍 highlight</span></div>
+    </div>
+    <div id="pdfTools" title="">
+      <button class="tb active" data-tool="hand" title="Scroll / pan">✋</button>
+      <button class="tb" data-tool="select" title="Select text">⌶</button>
+      <button class="tb" data-tool="lasso" title="Lasso a region → workspace">⭕</button>
+      <hr>
+      <button class="tb" data-tool="pen" title="Pen">✒️</button>
+      <button class="tb" data-tool="hl" title="Highlighter">🖍</button>
+      <button class="tb" data-tool="note" title="Sticky note">🗒</button>
+      <button class="tb" data-tool="erase" title="Eraser">⌫</button>
+      <button class="tb" id="undoAnno" title="Undo last mark">↶</button>
+      <hr>
+      <button class="tb" id="exportPdfBtn" title="Export this document as PDF with mark-up">⬇</button>
+    </div>
+    <div id="toolPop"></div>
+    <div id="strip">
+      <div class="handle"><i></i>Pages<i></i></div>
+      <div id="thumbs"></div>
     </div>
   </section>
 
   <div id="divider"></div>
 
   <section id="wsWrap">
+    <div id="wsTabs"></div>
     <div id="wsBar">
-      <span class="title">Workspace</span>
       <div class="seg">
         <button class="btn active" data-ws="move">✋ Move</button>
         <button class="btn" data-ws="pen">✒️ Pen</button>
@@ -215,14 +333,27 @@ const reader = $('#reader');
 //  STATE
 // =====================================================================
 // Several documents can be open at once; `doc` is the one shown in the reader. The workspace is shared by all of them.
-const docs = [];                        // [{ id, name, hue, pdf, pages, pagesEl, pageWidth, index }]
+const docs = [];                        // [{ id, name, hue, bytes, pdf, pages, pagesEl, pageWidth, index }]
 let doc = null;                         // active document
-let nextDocId = 1;
+let nextId = 1;                         // one counter for every id in the case (documents, workspaces, cards, edges)
+const uid = () => nextId++;
 const HUES = [18, 210, 140, 280, 45, 330, 180];
-const ws = { x: 40, y: 40, z: 1, cards: [], edges: [], strokes: [], tool: 'move', linkSrc: null, selected: null, nextId: 1 };
+const pickHue = () => HUES.find(h => !docs.some(d => d.hue === h)) ?? HUES[docs.length % HUES.length];
+// A case has several workspaces; `ws` is the active one. Documents are case-level and shared by all of them.
+const workspaces = [];
+const makeWorkspace = (title, id = uid()) => ({ id, title, createdAt: new Date().toISOString(), x: 40, y: 40, z: 1, cards: [], edges: [], strokes: [], linkSrc: null, selected: null });
+let ws = makeWorkspace('Workspace 1'); workspaces.push(ws);
+let wsTool = 'move';                    // workspace tool (move / pen / link) is UI state, shared by all workspaces
+let booted = false, restoring = false;  // autosave is off until the startup restore has finished, and while a case loads
 let tool = 'hand';
 let selection = null;                   // { doc, page, bbox:{x,y,w,h} (normalised), text }
 
+const desktop = window.desktop?.isDesktop ? window.desktop : null;   // Electron bridge (§6 of docs/SPEC-case-file.md)
+// Subscribe at module start (the shell sends open-file right after did-finish-load). The callbacks only run after this
+// module has finished evaluating, so the functions they call (declared further down) are ready by then.
+desktop?.onMenu?.(a => caseAction(a));
+desktop?.onOpenFile?.(f => onDesktopOpenFile(f));
+const toArrayBuffer = b => b instanceof ArrayBuffer ? b : b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 const statusTxt = $('#statusTxt'), bar = $('#bar i');
 const setStatus = (t, frac) => { statusTxt.textContent = t; if (frac != null) bar.style.width = `${Math.round(frac * 100)}%`; };
 const docById = id => docs.find(d => d.id === id);
@@ -231,63 +362,156 @@ const pageOf = el => docById(+el.dataset.doc)?.pages[+el.dataset.n - 1];   // pa
 // =====================================================================
 //  LOADING
 // =====================================================================
+const openFile = async file => openPdf({ name: file.name, bytes: await file.arrayBuffer() });
 $('#file').addEventListener('change', e => { [...e.target.files].forEach(openFile); e.target.value = ''; });
-$('#loadSample').addEventListener('click', async () => {
+$('#openPdfBtn').addEventListener('click', () => openPdfUI());
+async function openPdfUI() {
+  if (!desktop) { $('#file').click(); return; }
+  const files = await desktop.openPdfs();
+  for (const f of files || []) openPdf({ name: f.name, bytes: toArrayBuffer(f.bytes) });
+}
+async function loadSample(name) {
   setStatus('Fetching sample…');
-  const r = await fetch('sample/scanned_petition.pdf');
-  openFile(new File([await r.blob()], 'scanned_petition.pdf'));
-});
-$('#loadSample2').addEventListener('click', async () => {
-  setStatus('Fetching sample…');
-  const r = await fetch('sample/scanned_counter.pdf');
-  openFile(new File([await r.blob()], 'scanned_counter.pdf'));
-});
+  const r = await fetch('sample/' + name);
+  openPdf({ name, bytes: await r.arrayBuffer() });
+}
+$('#loadSample').addEventListener('click', () => loadSample('scanned_petition.pdf'));
+$('#loadSample2').addEventListener('click', () => loadSample('scanned_counter.pdf'));
 ['dragover', 'drop'].forEach(ev => document.addEventListener(ev, e => {
   e.preventDefault();
-  if (ev === 'drop') [...e.dataTransfer.files].forEach(openFile);
+  if (ev !== 'drop') return;
+  for (const f of e.dataTransfer.files) {
+    if (/\.lawcase$/i.test(f.name)) openCaseFromWebFile(f);
+    else if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') openFile(f);
+  }
 }));
 
-async function openFile(file) {
+// Opens a PDF from its bytes. `saved` carries what a restore knows already (id, hue, OCR words, marks, scroll).
+async function openPdf({ name, bytes, id = uid(), hue = pickHue(), ocr = null, annotations = null, scrollTop = 0, scrollLeft = 0, activate = true }) {
   $('#drop').classList.add('hidden');
-  const d = { id: nextDocId++, name: file.name, pdf: null, pages: [], index: [], pageWidth: 820 };
-  d.hue = HUES[(d.id - 1) % HUES.length];
+  const d = { id, name, hue, bytes, pdf: null, pages: [], index: [], tree: { children: [] }, pageWidth: 820, scrollTop, scrollLeft };
   d.pagesEl = document.createElement('div'); d.pagesEl.className = 'pages'; d.pagesEl.style.display = 'none';
   reader.appendChild(d.pagesEl);
   docs.push(d);
-  activateDoc(d);
-  setStatus(`Opening ${file.name}…`, 0);
-  const data = new Uint8Array(await file.arrayBuffer());
-  d.pdf = await pdfjsLib.getDocument({ data }).promise;
+  if (activate) activateDoc(d); else renderTabs();
+  setStatus(`Opening ${name}…`, 0);
+  try {
+    d.pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;   // pdf.js detaches what it gets: keep the original
+  } catch (err) {
+    console.error(err); setStatus(`Could not open ${name}: ${err.message}`);
+    d.pagesEl.remove(); docs.splice(docs.indexOf(d), 1); if (doc === d) { doc = null; if (docs[0]) activateDoc(docs[0]); }
+    renderTabs(); renderTree(); return null;
+  }
+  if (!docs.includes(d)) { d.pdf.destroy(); return null; }
   d.pageWidth = Math.max(320, Math.min(900, reader.clientWidth - 48));
   for (let n = 1; n <= d.pdf.numPages; n++) {
     const p = await d.pdf.getPage(n);
+    if (!docs.includes(d)) return null;                            // the case was replaced while this was loading
     const [, , w, h] = p.view;
     const el = document.createElement('div'); el.className = 'page'; el.dataset.n = n; el.dataset.doc = d.id;
-    const cssW = d.pageWidth, cssH = cssW * h / w;
-    el.style.width = cssW + 'px'; el.style.height = cssH + 'px';
-    el.innerHTML = `<div class="pageNo">Page ${n}</div><div class="ocrTag">queued</div><canvas></canvas><div class="ph">Page ${n}</div><div class="textLayer"></div><svg class="ovl"></svg>`;
+    el.innerHTML = `<div class="pageNo">Page ${n}</div><div class="ocrTag">queued</div><canvas></canvas><div class="ph">Page ${n}</div><div class="textLayer"></div><svg class="anno" viewBox="0 0 1000 ${(1000 * h / w).toFixed(1)}" preserveAspectRatio="none"></svg><svg class="ovl"></svg>`;
     d.pagesEl.appendChild(el);
-    d.pages.push({ doc: d, n, el, pdfPage: p, canvas: $('canvas', el), textLayer: $('.textLayer', el), ovl: $('.ovl', el), tag: $('.ocrTag', el), w, h, cssW, cssH, words: null, rendered: false, lines: [], ocrState: 'queued' });
+    const page = { doc: d, n, el, pdfPage: p, canvas: $('canvas', el), textLayer: $('.textLayer', el), anno: $('.anno', el), ovl: $('.ovl', el), tag: $('.ocrTag', el), w, h, cssW: 0, cssH: 0, words: null, rendered: false, lines: [], ocrState: 'queued', annos: [] };
+    sizePage(page);
+    d.pages.push(page);
+    const o = ocr?.pages?.[n - 1];
+    if (o && Array.isArray(o.words)) applyOcr(page, o);           // restored: no re-OCR
+    for (const m of annotations?.pages?.find(x => x.n === n)?.items || []) addMark(page, m);
     observer.observe(el);
   }
-  renderTabs();
-  setStatus(`${file.name}: ${d.pdf.numPages} pages · starting OCR`, 0);
+  if (d.pages.some(p => p.ocrState === 'done')) buildIndex(d);
+  if (doc === d) { reader.scrollTop = d.scrollTop || 0; reader.scrollLeft = d.scrollLeft || 0; }
+  renderTabs(); renderThumbs(); refreshMaster();
+  const left = d.pages.filter(p => p.ocrState !== 'done').length;
+  setStatus(`${name}: ${d.pdf.numPages} pages${left ? ' · starting OCR' : ''}`, left ? 0 : 1);
+  changed();
   runOcrQueue();
+  return d;
+}
+function applyOcr(p, o) {                     // saved words → text layer + lines, exactly as if OCR had just finished
+  p.words = o.words; p.source = o.source || 'ocr'; p.lines = groupLines(p.words); p.ocrState = 'done';
+  p.tag.textContent = p.source === 'text' ? 'text layer' : 'OCR ✓';
+  paintTextLayer(p);
 }
 
 function activateDoc(d) {
   if (doc === d) return;
   doc = d; hideSelection();
   docs.forEach(x => x.pagesEl.style.display = x === d ? '' : 'none');
-  reader.scrollTop = d.scrollTop || 0;
-  renderTabs(); renderTree(); scrollSpy();
+  for (const p of d.pages) if (p.unfit && p.words) paintTextLayer(p);   // layers painted while hidden could not be measured
+  reader.scrollTop = d.scrollTop || 0; reader.scrollLeft = d.scrollLeft || 0;
+  renderTabs(); renderTree(); renderThumbs(); scrollSpy();
+  changed(true);
+}
+
+// ---- the reader is a horizontal board: pages sit side by side and scroll sideways. There is no vertical mode.
+const view = 'board';
+reader.classList.add('board');
+function sizePage(p) {                      // CSS size of a page; everything else is relative to it
+  p.cssH = Math.max(300, reader.clientHeight - 170); p.cssW = p.cssH * p.w / p.h;
+  p.el.style.width = p.cssW + 'px'; p.el.style.height = p.cssH + 'px';
+}
+function relayout() {
+  hideSelection();
+  for (const d of docs) for (const p of d.pages) { sizePage(p); if (p.words) paintTextLayer(p); if (p.rendered) unrender(p); }
+  // pages near the viewport are re-rendered by the observer; nudge it
+  requestAnimationFrame(() => { for (const p of doc?.pages || []) { const r = p.el.getBoundingClientRect(); if (r.right > -1200 && r.left < innerWidth + 1200 && r.bottom > -1200 && r.top < innerHeight + 1200) ensureRendered(p); } scrollSpy(); });
+}
+function setView() { reader.classList.add('board'); relayout(); }   // kept for the restore path; the board is the only view
+addEventListener('resize', () => { clearTimeout(relayout.t); relayout.t = setTimeout(relayout, 150); });
+// a normal wheel scrolls sideways
+reader.addEventListener('wheel', e => {
+  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { reader.scrollLeft += e.deltaY; e.preventDefault(); }
+}, { passive: false });
+
+// ---- filmstrip of page previews along the bottom
+const strip = $('#strip'), thumbsEl = $('#thumbs');
+$('.handle', strip).onclick = () => strip.classList.toggle('pinned');
+function renderThumbs() {
+  thumbsEl.innerHTML = '';
+  if (!doc) return;
+  for (const p of doc.pages) {
+    const t = document.createElement('div'); t.className = 'thumb'; t.dataset.n = p.n;
+    t.style.width = (88 * p.w / p.h) + 'px';
+    t.innerHTML = `<span>${p.n}</span>`;
+    t.onclick = () => scrollToPos(doc, p.n, 0);
+    thumbsEl.appendChild(t);
+    thumbOf(p).then(c => { if (c && t.isConnected) t.prepend(c); }).catch(() => {});
+  }
+  markCurrentThumb();
+}
+async function thumbOf(p) {                 // tiny render, cached per page
+  if (p.thumb) return p.thumb;
+  const vp = p.pdfPage.getViewport({ scale: 176 / p.h });
+  const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+  await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  p.thumb = c; return c;
+}
+function markCurrentThumb() {
+  const n = currentPageNo();
+  $$('.thumb', thumbsEl).forEach(t => t.classList.toggle('current', +t.dataset.n === n));
+  const cur = $('.thumb.current', thumbsEl); if (cur) cur.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+function currentPageNo() {                  // page under the middle of the viewport (either axis)
+  if (!doc) return 0;
+  const rr = reader.getBoundingClientRect(); const cx = rr.left + rr.width / 2, cy = rr.top + Math.min(160, rr.height / 2);
+  let best = doc.pages[0]?.n || 0, bestD = Infinity;
+  for (const p of doc.pages) {
+    const r = p.el.getBoundingClientRect();
+    const d = view === 'board' ? Math.abs((r.left + r.right) / 2 - cx) : Math.abs(r.top - cy);
+    if (d < bestD) { bestD = d; best = p.n; }
+  }
+  return best;
 }
 function closeDoc(d) {
   d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove();
   docs.splice(docs.indexOf(d), 1);
-  ws.cards.filter(c => c.source?.docId === d.id).forEach(c => c.marker?.remove());
-  if (doc === d) { doc = null; if (docs[0]) activateDoc(docs[0]); else { renderTabs(); renderTree(); $('#drop').classList.remove('hidden'); } }
-  else renderTabs();
+  d.pdf?.destroy();
+  workspaces.forEach(w => w.cards.filter(c => c.source?.docId === d.id).forEach(c => { c.marker?.remove(); c.marker = null; }));
+  if (doc === d) { doc = null; if (docs[0]) activateDoc(docs[0]); else { renderTabs(); renderTree(); renderThumbs(); $('#drop').classList.remove('hidden'); } }
+  else { renderTabs(); refreshMaster(); }
+  changed();
 }
 function renderTabs() {
   const bar = $('#docTabs'); bar.innerHTML = '';
@@ -299,7 +523,7 @@ function renderTabs() {
     bar.appendChild(t);
   }
 }
-reader.addEventListener('scroll', () => { if (doc) doc.scrollTop = reader.scrollTop; });
+reader.addEventListener('scroll', () => { if (doc && !restoring) { doc.scrollTop = reader.scrollTop; doc.scrollLeft = reader.scrollLeft; changed(true); } });
 
 // =====================================================================
 //  RENDERING (virtualised)
@@ -308,9 +532,9 @@ const observer = new IntersectionObserver(entries => {
   for (const e of entries) {
     const p = pageOf(e.target); if (!p) continue;
     if (e.isIntersecting) { ensureRendered(p); p.priority = Date.now(); }
-    else if (p.rendered && Math.abs(e.boundingClientRect.top) > 4000) unrender(p);
+    else if (p.rendered && Math.max(Math.abs(e.boundingClientRect.top), Math.abs(e.boundingClientRect.left)) > 4000) unrender(p);
   }
-}, { root: $('#reader'), rootMargin: '1200px 0px' });
+}, { root: $('#reader'), rootMargin: '1200px 1200px 1200px 1200px' });
 
 async function ensureRendered(p) {
   if (p.rendered || p.rendering) return p.renderPromise;
@@ -351,10 +575,12 @@ async function runOcrQueue() {
     try {
       await extractPage(p);
       p.ocrState = 'done'; p.tag.textContent = p.source === 'text' ? 'text layer' : `OCR ✓`; p.tag.classList.remove('busy');
-    } catch (err) { console.error(err); p.ocrState = 'error'; p.tag.textContent = 'OCR failed'; }
+    } catch (err) { if (docs.includes(p.doc)) { console.error(err); p.ocrState = 'error'; p.tag.textContent = 'OCR failed'; } }
+    if (!docs.includes(p.doc)) continue;                // document closed / case replaced while this page was read
     const done = all.filter(p => p.ocrState === 'done').length;
     setStatus(`OCR ${done}/${all.length} pages${docs.length > 1 ? ` across ${docs.length} documents` : ''}`, done / all.length);
     buildIndex(p.doc); renderTabs();
+    changed();                                          // OCR words are case data: autosave them
   }
   ocrRunning = false; currentOcr = null;
   const all = docs.flatMap(d => d.pages);
@@ -396,6 +622,7 @@ async function extractPage(p) {
       words.push({ text: wd.text, x: x0 / vp.width, y: y0 / vp.height, w: (x1 - x0) / vp.width, h: (y1 - y0) / vp.height, conf: wd.confidence });
     }
   }
+  if (!docs.includes(p.doc)) return;
   p.words = words;
   p.lines = groupLines(words);
   paintTextLayer(p);
@@ -406,6 +633,7 @@ function paintTextLayer(p) {
   const tl = p.textLayer; tl.innerHTML = '';
   const W = p.cssW, H = p.cssH;                 // fixed sizes, so this works for a document that is not currently shown
   const frag = document.createDocumentFragment();
+  p.unfit = false;
   p.words.forEach((w, i) => {
     const s = document.createElement('span');
     s.textContent = w.text + ' ';
@@ -414,7 +642,7 @@ function paintTextLayer(p) {
     s.style.cssText = `left:${w.x * W}px; top:${w.y * H}px; font-size:${fs}px; height:${w.h * H}px;`;
     frag.appendChild(s);
     // horizontally fit the glyph box
-    requestAnimationFrame(() => { const tw = s.offsetWidth; if (tw) s.style.transform = `scaleX(${(w.w * W) / tw})`; });
+    requestAnimationFrame(() => { const tw = s.offsetWidth; if (tw) s.style.transform = `scaleX(${(w.w * W) / tw})`; else p.unfit = true; });
   });
   tl.appendChild(frag);
   applySearch(p);
@@ -499,9 +727,25 @@ function buildIndex(d) {
     stack.push({ level: h.level, node });
   }
   d.tree = root;
-  if (d === doc) renderTree();
+  if (d === doc || sideTab === 'master') renderTree();
 }
-function renderTree() {                      // sidebar shows the active document's outline
+// ---- left sidebar: "Document" (active document's outline) or "Master index" (every document + this workspace's clippings)
+let sideTab = 'doc', masterQuery = '';
+const masterCollapsed = new Set();             // doc ids folded in the master index
+$('#sideTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-side]'); if (!b) return;
+  sideTab = b.dataset.side;
+  $$('#sideTabs [data-side]').forEach(x => x.classList.toggle('active', x === b));
+  $('#masterFilter').hidden = sideTab !== 'master';
+  renderTree();
+});
+$('#masterFilter').addEventListener('input', e => { masterQuery = e.target.value.trim().toLowerCase(); renderTree(); });
+const refreshMaster = () => { if (sideTab === 'master') renderMaster(); };
+function renderTree() {
+  if (sideTab === 'master') { renderMaster(); return; }
+  renderDocTree();
+}
+function renderDocTree() {                   // sidebar shows the active document's outline
   const tree = $('#tree'); tree.innerHTML = '';
   if (!doc) { tree.innerHTML = '<div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div>'; return; }
   if (!doc.index.length) { tree.innerHTML = '<div id="indexEmpty">No headings detected yet…</div>'; return; }
@@ -517,6 +761,76 @@ function renderTree() {                      // sidebar shows the active documen
   walk(doc.tree.children);
   scrollSpy();
 }
+
+function renderMaster() {
+  const tree = $('#tree'); tree.innerHTML = '';
+  const f = masterQuery;
+  const clipLabel = c => (c.text || c.note || `Image clip · p.${c.source.page}`).replace(/\s+/g, ' ').trim().slice(0, 50);
+  const clipMatches = c => !f || clipLabel(c).toLowerCase().includes(f) || (c.text || '').toLowerCase().includes(f);
+  // this workspace's clippings, keyed by the heading they sit under (computed live: headings grow as OCR proceeds)
+  const byKey = new Map(), orphans = [];
+  const keyOf = h => `${h.docId}:${h.page}:${h.y}`;
+  for (const c of ws.cards) {
+    if (c.type !== 'clipping' || !c.source) continue;
+    const d = docById(c.source.docId);
+    if (!d) { orphans.push(c); continue; }
+    const h = headingAt(d, c.source.page, c.source.bbox.y);
+    const k = h ? keyOf(h) : `${d.id}:none`;
+    if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(c);
+  }
+  const clipEl = (c, depth) => {
+    const a = document.createElement('a'); a.className = 'mClip'; a.style.marginLeft = (14 + depth * 14) + 'px';
+    a.textContent = clipLabel(c); a.title = c.text || clipLabel(c);
+    a.onclick = () => focusCard(c);
+    return a;
+  };
+  if (!docs.length && !orphans.length) { tree.innerHTML = '<div id="indexEmpty">Open PDFs — every document in the case and this workspace\'s clippings are listed here.</div>'; return; }
+  for (const d of docs) {
+    const g = document.createElement('div'); g.className = 'mGroup'; g.style.setProperty('--dc', `hsl(${d.hue} 60% 45%)`);
+    const nClips = [...byKey].filter(([k]) => k.startsWith(d.id + ':')).reduce((s, [, v]) => s + v.length, 0);
+    const body = document.createElement('div'); body.className = 'mBody';
+    let any = false;
+    const loose = (byKey.get(`${d.id}:none`) || []).filter(clipMatches);
+    if (loose.length) { any = true; const t = document.createElement('div'); t.className = 'mEmpty'; t.textContent = 'Before the first heading'; body.appendChild(t); loose.forEach(c => body.appendChild(clipEl(c, 1))); }
+    const walk = (nodes, depth) => {              // returns a fragment of visible nodes (a heading shows if it, a clip or a descendant matches)
+      const frag = document.createDocumentFragment(); let vis = false;
+      for (const nd of nodes) {
+        const clips = byKey.get(keyOf(nd)) || [];
+        const self = !f || nd.title.toLowerCase().includes(f);
+        const shown = self ? clips : clips.filter(clipMatches);
+        const kids = walk(nd.children, depth + 1);
+        if (!self && !shown.length && !kids.vis) continue;
+        vis = true;
+        const a = document.createElement('a');
+        a.className = `node l${Math.min(6, depth)} ${nd.kind === 'annex' ? 'annex' : ''}`;
+        a.innerHTML = `<span class="pg">p.${nd.page}</span>${clips.length ? `<span class="badge" title="${clips.length} clipping${clips.length > 1 ? 's' : ''} in this workspace">${clips.length}</span>` : ''}${escapeHtml(nd.title)}`;
+        a.title = nd.title;
+        a.onclick = () => scrollToPos(d, nd.page, nd.y, true);
+        frag.appendChild(a);
+        shown.forEach(c => frag.appendChild(clipEl(c, depth)));
+        frag.appendChild(kids.frag);
+      }
+      return { frag, vis };
+    };
+    const r = walk(d.tree?.children || [], 1);
+    if (r.vis) { any = true; body.appendChild(r.frag); }
+    if (f && !any) continue;
+    if (!any) { const t = document.createElement('div'); t.className = 'mEmpty'; t.textContent = d.pages.length && d.pages.every(p => p.ocrState === 'done') ? 'No headings detected' : 'Headings appear as OCR completes…'; body.appendChild(t); }
+    const folded = masterCollapsed.has(d.id) && !f;
+    g.classList.toggle('collapsed', folded);
+    const hd = document.createElement('div'); hd.className = 'mHead';
+    hd.innerHTML = `<span class="tw">${folded ? '▶' : '▼'}</span><i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span><span class="ct">${d.index.length} h · ${nClips} clip${nClips === 1 ? '' : 's'}</span>`;
+    hd.onclick = () => { masterCollapsed.has(d.id) ? masterCollapsed.delete(d.id) : masterCollapsed.add(d.id); renderMaster(); };
+    g.append(hd, body); tree.appendChild(g);
+  }
+  const lost = orphans.filter(clipMatches);
+  if (lost.length) {
+    const g = document.createElement('div'); g.className = 'mGroup';
+    g.innerHTML = `<div class="mHead"><span class="tw"></span><i style="background:#aaa"></i><span class="nm">Closed documents</span><span class="ct">${lost.length}</span></div>`;
+    lost.forEach(c => g.appendChild(clipEl(c, 0))); tree.appendChild(g);
+  }
+  if (!tree.children.length) tree.innerHTML = `<div id="indexEmpty">Nothing matches “${escapeHtml(f)}”.</div>`;
+}
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function headingAt(d, page, y) {            // nearest heading at/above a position → "¶ B." label
@@ -528,13 +842,19 @@ function headingAt(d, page, y) {            // nearest heading at/above a positi
 // scroll-spy: highlight the heading currently in view
 reader.addEventListener('scroll', () => { requestAnimationFrame(scrollSpy); });
 function scrollSpy() {
-  if (!doc || !doc.index.length) return;
-  const mid = reader.getBoundingClientRect().top + 120;
+  markCurrentThumb();
+  if (!doc || !doc.index.length || sideTab !== 'doc') return;
   let cur = null;
-  for (const p of doc.pages) {
-    const r = p.el.getBoundingClientRect();
-    if (r.top > mid) break;
-    for (const h of doc.index) if (h.page === p.n && r.top + h.y * r.height <= mid) cur = h;
+  if (view === 'board') {                   // the centred page: its last heading in the top half, else the nearest earlier one
+    const n = currentPageNo();
+    for (const h of doc.index) if (h.page < n || (h.page === n && h.y <= 0.55)) cur = h;
+  } else {
+    const mid = reader.getBoundingClientRect().top + 120;
+    for (const p of doc.pages) {
+      const r = p.el.getBoundingClientRect();
+      if (r.top > mid) break;
+      for (const h of doc.index) if (h.page === p.n && r.top + h.y * r.height <= mid) cur = h;
+    }
   }
   $$('#tree .node').forEach(n => n.classList.remove('current'));
   const el = cur && $$('#tree .node').find(n => n.title === cur.title && n.textContent.includes(`p.${cur.page}`));
@@ -545,8 +865,8 @@ function scrollToPos(d, page, y, flash = false, bbox = null) {
   if (!d) return;
   activateDoc(d);                                     // switch tabs if the target is another document
   const p = d.pages[page - 1]; if (!p) return;
-  const top = p.el.offsetTop + y * p.el.clientHeight - 24;
-  reader.scrollTo({ top, behavior: 'smooth' });
+  if (view === 'board') reader.scrollTo({ left: p.el.offsetLeft - (reader.clientWidth - p.cssW) / 2, behavior: 'smooth' });
+  else reader.scrollTo({ top: p.el.offsetTop + y * p.el.clientHeight - 24, behavior: 'smooth' });
   if (flash || bbox) {
     const b = bbox || { x: 0.02, y: y - 0.004, w: 0.96, h: 0.03 };
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -580,13 +900,136 @@ function applySearch(p) {
 // =====================================================================
 //  TOOLS: hand / text select / lasso
 // =====================================================================
-$('#tools').addEventListener('click', e => {
+const pen = { pen: { color: '#1b4ea3', width: 3 }, hl: { color: '#ffe600', width: 22 } };
+const SWATCHES = { pen: ['#1b4ea3', '#1f1d1a', '#c0392b', '#1e8449', '#8e44ad'], hl: ['#ffe600', '#7bff6b', '#ff8ae2', '#6bd8ff', '#ffb34d'] };
+$('#pdfTools').addEventListener('click', e => {
   const b = e.target.closest('[data-tool]'); if (!b) return;
   tool = b.dataset.tool;
-  $$('#tools .btn').forEach(x => x.classList.toggle('active', x === b));
-  reader.className = `tool-${tool}`;
-  hideSelection();
+  $$('#pdfTools [data-tool]').forEach(x => x.classList.toggle('active', x === b));
+  reader.className = `tool-${tool} board`;
+  hideSelection(); renderToolPop();
 });
+function renderToolPop() {
+  const pop = $('#toolPop');
+  if (tool !== 'pen' && tool !== 'hl') { pop.classList.remove('show'); return; }
+  const s = pen[tool];
+  pop.innerHTML = SWATCHES[tool].map(c => `<span class="sw ${c === s.color ? 'on' : ''}" data-c="${c}" style="background:${c}"></span>`).join('') +
+    `<span style="width:8px"></span>` +
+    (tool === 'pen' ? [2, 3, 6] : [14, 22, 34]).map(w => `<span class="wd ${w === s.width ? 'on' : ''}" data-w="${w}"><i style="height:${Math.max(2, w / (tool === 'pen' ? 1 : 4))}px"></i></span>`).join('');
+  pop.classList.add('show');
+  pop.onclick = ev => { const sw = ev.target.closest('.sw'), wd = ev.target.closest('.wd'); if (sw) s.color = sw.dataset.c; if (wd) s.width = +wd.dataset.w; if (sw || wd) renderToolPop(); };
+}
+
+// ---- pen / highlighter / eraser / sticky notes, stored per page in page-relative units (0..1000 wide)
+const annoStack = [];                       // for undo
+let drawing = null;
+const annoPt = (p, e) => { const r = p.el.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * 1000, ((e.clientY - r.top) / r.height) * 1000 * p.h / p.w]; };
+reader.addEventListener('pointerdown', e => {
+  if (!['pen', 'hl', 'erase', 'note'].includes(tool)) return;
+  const pageEl = e.target.closest('.page'); if (!pageEl) return;
+  const p = pageOf(pageEl); if (!p) return;
+  const [x, y] = annoPt(p, e);
+  if (tool === 'note') { addSticky(p, x / 1000, y / (1000 * p.h / p.w)); return; }
+  if (tool === 'erase') { eraseAt(p, x, y); drawing = { p, erase: true }; p.ovl.setPointerCapture(e.pointerId); return; }
+  const s = pen[tool];
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke', s.color); path.setAttribute('stroke-width', s.width);
+  if (tool === 'hl') { path.setAttribute('class', 'hl'); path.setAttribute('opacity', '0.45'); }
+  p.anno.appendChild(path);
+  drawing = { p, pts: [[x, y]], path, kind: tool, width: s.width, color: s.color };
+  p.ovl.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+reader.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  const [x, y] = annoPt(drawing.p, e);
+  if (drawing.erase) { eraseAt(drawing.p, x, y); return; }
+  // highlighter stays on a straight line unless the pen moves a lot vertically (keeps marks tidy over text)
+  if (drawing.kind === 'hl' && drawing.pts.length > 1 && Math.abs(y - drawing.pts[0][1]) < drawing.width * 0.6) drawing.pts.push([x, drawing.pts[0][1]]);
+  else drawing.pts.push([x, y]);
+  drawing.path.setAttribute('d', drawing.pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' '));
+});
+const endDraw = () => {
+  if (!drawing) return;
+  if (!drawing.erase) {
+    if (drawing.pts.length < 2) drawing.path.setAttribute('d', `M${drawing.pts[0][0]},${drawing.pts[0][1]} l0.1,0`);
+    const a = { p: drawing.p, el: drawing.path, kind: drawing.kind, pts: drawing.pts, width: drawing.width, color: drawing.color, opacity: drawing.kind === 'hl' ? 0.45 : 1 };
+    drawing.p.annos.push(a); annoStack.push(a);
+  }
+  drawing = null;
+  changed();
+};
+reader.addEventListener('pointerup', endDraw); reader.addEventListener('pointercancel', endDraw);
+function eraseAt(p, x, y) {
+  for (const a of [...p.annos]) {
+    let hit = false;
+    if (a.pts) hit = a.pts.some(q => Math.hypot(q[0] - x, q[1] - y) < a.width / 2 + 10);
+    else if (a.rect) hit = x >= a.rect.x && x <= a.rect.x + a.rect.w && y >= a.rect.y && y <= a.rect.y + a.rect.h;
+    if (hit) { a.el.remove(); p.annos.splice(p.annos.indexOf(a), 1); changed(); }
+  }
+}
+$('#undoAnno').onclick = () => {
+  let a; while ((a = annoStack.pop()) && !a.el.isConnected);   // skip marks already erased or deleted
+  if (!a) return; a.el.remove(); const i = a.p.annos.indexOf(a); if (i >= 0) a.p.annos.splice(i, 1);
+  changed();
+};
+// a stored Mark (§2 of the spec) → the same SVG / sticky the tools draw
+function addMark(p, m) {
+  if (m.kind === 'note') { addSticky(p, (m.rect?.x || 0) / 1000, (m.rect?.y || 0) / (1000 * p.h / p.w), m.text || '', m.rect); return; }
+  const svg = 'http://www.w3.org/2000/svg';
+  let el;
+  if (m.pts?.length) {
+    el = document.createElementNS(svg, 'path');
+    el.setAttribute('stroke', m.color || (m.kind === 'hl' ? pen.hl.color : pen.pen.color)); el.setAttribute('stroke-width', m.width || 3);
+    el.setAttribute('d', m.pts.length > 1 ? m.pts.map((q, i) => (i ? 'L' : 'M') + (+q[0]).toFixed(1) + ',' + (+q[1]).toFixed(1)).join(' ') : `M${m.pts[0][0]},${m.pts[0][1]} l0.1,0`);
+  } else if (m.rect) {
+    el = document.createElementNS(svg, 'rect');
+    el.setAttribute('x', m.rect.x); el.setAttribute('y', m.rect.y); el.setAttribute('width', m.rect.w); el.setAttribute('height', m.rect.h);
+    el.setAttribute('fill', m.color || pen.hl.color);
+  } else return;
+  const opacity = m.opacity ?? (m.kind === 'hl' ? 0.45 : 1);
+  if (m.kind === 'hl') el.setAttribute('class', 'hl');
+  if (opacity !== 1) el.setAttribute('opacity', opacity);
+  p.anno.appendChild(el);
+  p.annos.push({ p, el, kind: m.kind, pts: m.pts || null, rect: m.rect || null, width: m.width, color: m.color, opacity });
+}
+const markOf = a => ({ kind: a.kind, color: a.color ?? null, width: a.width ?? null, opacity: a.opacity ?? null, pts: a.pts || null, rect: a.rect || null,
+  ...(a.kind === 'note' ? { text: a.text ?? '' } : {}) });
+// highlight rectangles made from a text selection (one per line)
+function highlightRects(p, rects) {
+  const k = 1000 * p.h / p.w;
+  for (const r of rects) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const rect = { x: r.x * 1000, y: r.y * k, w: r.w * 1000, h: r.h * k };
+    el.setAttribute('x', rect.x); el.setAttribute('y', rect.y); el.setAttribute('width', rect.w); el.setAttribute('height', rect.h);
+    el.setAttribute('fill', pen.hl.color); el.setAttribute('opacity', '0.45'); el.setAttribute('class', 'hl');
+    p.anno.appendChild(el);
+    const a = { p, el, kind: 'hl', rect, color: pen.hl.color, opacity: 0.45 }; p.annos.push(a); annoStack.push(a);
+  }
+  changed();
+}
+function addSticky(p, x, y, text = '', restoredRect = null) {   // restoredRect: re-created from a saved case (no focus, no undo entry)
+  const s = document.createElement('div'); s.className = 'sticky';
+  s.style.left = (x * 100) + '%'; s.style.top = (y * 100) + '%';
+  s.innerHTML = `<div class="sh"><span>note</span><span class="sx" title="Delete">×</span></div><div class="sb" contenteditable="true"></div>`;
+  $('.sb', s).textContent = text;
+  p.el.appendChild(s);
+  const a = { p, el: s, kind: 'note', rect: restoredRect ? { ...restoredRect } : { x: x * 1000, y: y * 1000 * p.h / p.w, w: 170 / p.cssW * 1000, h: 60 / p.cssW * 1000 } };
+  a.text = text;                               // kept on the object: a hidden document's sticky has no layout for innerText
+  p.annos.push(a);
+  $('.sx', s).onclick = () => { s.remove(); const i = p.annos.indexOf(a); if (i >= 0) p.annos.splice(i, 1); changed(); };
+  $('.sb', s).addEventListener('input', e => { a.text = e.target.innerText; changed(); });
+  const sh = $('.sh', s); let mv = null;
+  sh.addEventListener('pointerdown', e => { if (e.target.closest('.sx')) return; mv = { sx: e.clientX, sy: e.clientY, ox: parseFloat(s.style.left), oy: parseFloat(s.style.top) }; sh.setPointerCapture(e.pointerId); e.stopPropagation(); e.preventDefault(); });
+  sh.addEventListener('pointermove', e => { if (!mv) return; const r = p.el.getBoundingClientRect(); s.style.left = (mv.ox + (e.clientX - mv.sx) / r.width * 100) + '%'; s.style.top = (mv.oy + (e.clientY - mv.sy) / r.height * 100) + '%'; });
+  sh.addEventListener('pointerup', () => { if (!mv) return; mv = null; a.rect.x = parseFloat(s.style.left) * 10; a.rect.y = parseFloat(s.style.top) * 10 * p.h / p.w; changed(); });
+  if (restoredRect) return;
+  annoStack.push(a);
+  $('.sb', s).focus();
+  // switch back to hand so the next click doesn't drop another note
+  $('#pdfTools [data-tool="hand"]').click();
+  changed();
+}
 
 // ---- text selection → selection box
 document.addEventListener('selectionchange', () => {
@@ -601,7 +1044,8 @@ document.addEventListener('selectionchange', () => {
   const pr = pageEl.getBoundingClientRect();
   const x0 = Math.min(...rects.map(r => r.left)), y0 = Math.min(...rects.map(r => r.top));
   const x1 = Math.max(...rects.map(r => r.right)), y1 = Math.max(...rects.map(r => r.bottom));
-  setSelection({ doc: p.doc, page: p.n, bbox: { x: (x0 - pr.left) / pr.width, y: (y0 - pr.top) / pr.height, w: (x1 - x0) / pr.width, h: (y1 - y0) / pr.height }, text: sel.toString().replace(/\s+/g, ' ').trim() });
+  const norm = rects.filter(r => r.width > 2).map(r => ({ x: (r.left - pr.left) / pr.width, y: (r.top - pr.top) / pr.height, w: r.width / pr.width, h: r.height / pr.height }));
+  setSelection({ doc: p.doc, page: p.n, bbox: { x: (x0 - pr.left) / pr.width, y: (y0 - pr.top) / pr.height, w: (x1 - x0) / pr.width, h: (y1 - y0) / pr.height }, rects: norm, text: sel.toString().replace(/\s+/g, ' ').trim() });
 });
 
 // ---- lasso
@@ -658,6 +1102,7 @@ const selBox = $('#selBox'), selChip = $('#selChip');
 function setSelection(s) {
   selection = s;
   const p = s.doc.pages[s.page - 1];
+  $$('.page.focus').forEach(el => el.classList.remove('focus')); p.el.classList.add('focus');   // keeps a tilted board page straight while selected
   const left = p.el.offsetLeft + s.bbox.x * p.el.clientWidth, top = p.el.offsetTop + s.bbox.y * p.el.clientHeight;
   Object.assign(selBox.style, { display: 'block', left: left + 'px', top: top + 'px', width: s.bbox.w * p.el.clientWidth + 'px', height: s.bbox.h * p.el.clientHeight + 'px' });
   Object.assign(selChip.style, { display: 'block', left: left + s.bbox.w * p.el.clientWidth / 2 + 'px', top: top + 'px' });
@@ -665,8 +1110,18 @@ function setSelection(s) {
 function hideSelection() {
   selection = null; selBox.style.display = selChip.style.display = 'none';
   $$('.textLayer span.inlasso').forEach(s => s.classList.remove('inlasso'));
+  $$('.page.focus').forEach(el => el.classList.remove('focus'));
 }
-selChip.addEventListener('click', e => { if (!dragMoved && selection) { addClippingAtViewCenter(selection); hideSelection(); } });
+// Note: the chip captures the pointer on pointerdown, so the click's target is the chip itself,
+// never the inner "highlight" span. Remember which part was pressed instead.
+let chipHlPressed = false;
+selChip.addEventListener('pointerdown', e => { chipHlPressed = !!e.target.closest('#chipHl'); }, true);
+selChip.addEventListener('click', e => {
+  if (dragMoved || !selection) return;
+  if (chipHlPressed || e.target.closest('#chipHl')) {
+    chipHlPressed = false; const p = selection.doc.pages[selection.page - 1]; highlightRects(p, selection.rects || [selection.bbox]); hideSelection(); window.getSelection()?.removeAllRanges(); return; }
+  addClippingAtViewCenter(selection); hideSelection();
+});
 
 // ---- drag the selection into the workspace (pointer-based, works with touch + pen)
 const ghost = $('#ghost'); let drag = null, dragMoved = false;
@@ -702,23 +1157,81 @@ const wsEl = $('#ws'), inner = $('#wsInner'), cardsEl = $('#cards'), edgesSvg = 
 const applyView = () => {
   inner.style.transform = `translate(${ws.x}px, ${ws.y}px) scale(${ws.z})`;
   const t = `translate(${ws.x} ${ws.y}) scale(${ws.z})`; edgesSvg.setAttribute('transform', t); inkG.setAttribute('transform', t);
+  changed(true);                                  // the view transform is saved (throttled, does not mark the file dirty)
 };
 applyView();
 const toCanvas = (cx, cy) => { const r = wsEl.getBoundingClientRect(); return [(cx - r.left - ws.x) / ws.z, (cy - r.top - ws.y) / ws.z]; };
 
 $('#wsBar').addEventListener('click', e => {
   const b = e.target.closest('[data-ws]'); if (!b) return;
-  ws.tool = b.dataset.ws; ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc'));
+  wsTool = b.dataset.ws; ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc'));
   $$('#wsBar [data-ws]').forEach(x => x.classList.toggle('active', x === b));
-  wsEl.className = ws.tool === 'move' ? '' : ws.tool;
+  wsEl.className = wsTool === 'move' ? '' : wsTool;
 });
 $('#fit').onclick = () => { ws.x = 40; ws.y = 40; ws.z = 1; applyView(); };
-$('#addNote').onclick = () => { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addCard({ type: 'note', x: x - 140, y: y - 60, note: '' }).querySelector('.note').focus(); };
-$('#undoInk').onclick = () => { const s = ws.strokes.pop(); s?.el.remove(); };
+$('#addNote').onclick = () => { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addCard({ type: 'note', x: x - 140, y: y - 60, note: '' }).el.querySelector('.note').focus(); changed(); };
+$('#undoInk').onclick = () => { const s = ws.strokes.pop(); s?.el.remove(); if (s) changed(); };
 $('#exportWs').onclick = () => {
-  const data = { documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length })), cards: ws.cards.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, w: c.w, text: c.text, note: $('.note', c.el).innerText, source: c.source })), edges: ws.edges.map(e => ({ from: e.from, to: e.to, label: e.label })), strokes: ws.strokes.map(s => s.pts) };
+  const data = { title: ws.title, documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length, annotations: d.pages.flatMap(p => p.annos.map(a => ({ page: p.n, ...markOf(a) }))) })), ...workspaceJson(ws) };
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); a.download = 'workspace.json'; a.click();
 };
+
+// ---- workspace tabs: several workspaces per case, each with its own cards, links, ink and view
+function renderWsTabs() {
+  const bar = $('#wsTabs'); bar.innerHTML = '';
+  for (const w of workspaces) {
+    const t = document.createElement('div'); t.className = 'tab' + (w === ws ? ' active' : '');
+    t.title = 'Double-click to rename';
+    t.innerHTML = `<span class="nm">${escapeHtml(w.title)}</span><span class="st">${w.cards.length || ''}</span><button class="cl" title="Delete workspace">×</button>`;
+    t.onclick = e => { if (e.target.closest('.cl')) deleteWorkspace(w); else if (w !== ws) switchWorkspace(w); };
+    t.ondblclick = e => { if (!e.target.closest('.cl')) renameWorkspace(w, t); };
+    bar.appendChild(t);
+  }
+  const add = document.createElement('div'); add.className = 'tab add'; add.textContent = '＋'; add.title = 'New workspace';
+  add.onclick = () => addWorkspace();
+  bar.appendChild(add);
+}
+function addWorkspace(title) {
+  const w = makeWorkspace(title || `Workspace ${workspaces.length + 1}`);
+  workspaces.push(w); switchWorkspace(w); changed();
+  return w;
+}
+function renameWorkspace(w, tabEl) {
+  const nm = $('.nm', tabEl); if (!nm) return;
+  const inp = document.createElement('input'); inp.value = w.title; nm.replaceWith(inp); inp.focus(); inp.select();
+  const done = save => { if (save && inp.value.trim()) { w.title = inp.value.trim(); changed(); } renderWsTabs(); };
+  inp.onkeydown = ev => { if (ev.key === 'Enter') inp.blur(); if (ev.key === 'Escape') { inp.onblur = null; done(false); } ev.stopPropagation(); };
+  inp.onblur = () => done(true);
+}
+function deleteWorkspace(w) {
+  if (workspaces.length <= 1) { setStatus('A case always keeps at least one workspace'); return; }
+  if (!confirm(`Delete workspace “${w.title}”${w.cards.length ? ` and its ${w.cards.length} card${w.cards.length > 1 ? 's' : ''}` : ''}?`)) return;
+  const i = workspaces.indexOf(w);
+  if (w === ws) switchWorkspace(workspaces[i + 1] || workspaces[i - 1]);
+  workspaces.splice(i, 1);
+  w.cards.forEach(c => { c.el.remove(); c.marker?.remove(); if (c.imgUrl) URL.revokeObjectURL(c.imgUrl); });
+  renderWsTabs(); changed();
+}
+function switchWorkspace(w) {                    // swap the active workspace's DOM in place
+  if (ws && ws !== w) {
+    ws.cards.forEach(c => { c.el.remove(); c.marker?.remove(); c.marker = null; });
+    ws.strokes.forEach(s => s.el.remove());
+    ws.linkSrc?.el.classList.remove('linkSrc'); ws.linkSrc = null;
+  }
+  ws = w;
+  for (const c of w.cards) { if (!c.el.isConnected) cardsEl.appendChild(c.el); if (!c.marker) addMarker(c); }
+  for (const s of w.strokes) if (!s.el.isConnected) inkG.appendChild(s.el);
+  selectedEdge = null;
+  applyView(); drawEdges(); selectCard(w.selected && w.cards.includes(w.selected) ? w.selected : null);
+  renderWsTabs(); refreshMaster();
+  changed(true);
+}
+function makeStrokeEl(s) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke-width', s.width || 2.2);
+  path.setAttribute('d', s.pts.map((p, i) => (i ? 'L' : 'M') + (+p[0]).toFixed(1) + ',' + (+p[1]).toFixed(1)).join(' '));
+  return path;
+}
 
 // pan / zoom
 wsEl.addEventListener('wheel', e => {
@@ -734,11 +1247,11 @@ wsEl.addEventListener('wheel', e => {
 let pan = null, pinch = null; const touches = new Map();
 wsEl.addEventListener('pointerdown', e => {
   if (e.target.closest('.card')) return;
-  if (ws.tool === 'pen' && e.pointerType !== 'touch') return;      // ink handled below (pen/mouse); fingers pan
+  if (wsTool === 'pen' && e.pointerType !== 'touch') return;      // ink handled below (pen/mouse); fingers pan
   touches.set(e.pointerId, [e.clientX, e.clientY]);
   if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: ws.z }; pan = null; return; }
   pan = { sx: e.clientX, sy: e.clientY, ox: ws.x, oy: ws.y }; wsEl.setPointerCapture(e.pointerId);
-  if (ws.tool === 'link') { ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc')); }
+  if (wsTool === 'link') { ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc')); }
   selectCard(null);
 });
 wsEl.addEventListener('pointermove', e => {
@@ -758,20 +1271,21 @@ wsEl.addEventListener('pointerup', endPan); wsEl.addEventListener('pointercancel
 // ink (pen / mouse in Pen mode)
 let stroke = null;
 inkSvg.addEventListener('pointerdown', e => {
-  if (ws.tool !== 'pen' || e.pointerType === 'touch') return;
+  if (wsTool !== 'pen' || e.pointerType === 'touch') return;
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   inkG.appendChild(path); inkSvg.setPointerCapture(e.pointerId);
   stroke = { pts: [], el: path, width: 2.2 };
   addInkPoint(e); e.preventDefault();
 });
 inkSvg.addEventListener('pointermove', e => { if (stroke) { addInkPoint(e); } });
-const endStroke = () => { if (stroke) { ws.strokes.push(stroke); stroke = null; } };
+const endStroke = () => { if (stroke) { ws.strokes.push(stroke); stroke = null; changed(); } };
 inkSvg.addEventListener('pointerup', endStroke); inkSvg.addEventListener('pointercancel', endStroke);
 function addInkPoint(e) {
   const [x, y] = toCanvas(e.clientX, e.clientY);
   stroke.pts.push([x, y]);
   const pr = e.pressure && e.pressure !== 0.5 ? e.pressure : 0.6;
-  stroke.el.setAttribute('stroke-width', (1 + pr * 3).toFixed(2));
+  stroke.width = +(1 + pr * 3).toFixed(2);
+  stroke.el.setAttribute('stroke-width', stroke.width);
   stroke.el.setAttribute('d', stroke.pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
 }
 
@@ -786,14 +1300,16 @@ async function addClipping(sel, x, y) {
   c.width = Math.max(1, sw); c.height = Math.max(1, sh);
   c.getContext('2d').drawImage(p.canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
   const h = headingAt(d, sel.page, sel.bbox.y);
-  const card = addCard({ type: 'clipping', x, y, img: c.toDataURL('image/png'), text: sel.text, source: { docId: d.id, docName: d.name, hue: d.hue, page: sel.page, bbox: sel.bbox, heading: h ? h.title : null } });
-  addMarker(card);
+  const blob = await new Promise(res => c.toBlob(res, 'image/png'));     // kept as a Blob: autosaved to IndexedDB and zipped as clips/<id>.png
+  const card = addCard({ type: 'clipping', x, y, blob, text: sel.text, source: { docId: d.id, docName: d.name, hue: d.hue, page: sel.page, bbox: sel.bbox, heading: h ? h.title : null } });
+  changed();
   return card;
 }
-function addClippingAtViewCenter(sel) { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addClipping(sel, x - 160 + (ws.cards.length % 5) * 24, y - 80 + (ws.cards.length % 5) * 24); }
+function addClippingAtViewCenter(sel) { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); return addClipping(sel, x - 160 + (ws.cards.length % 5) * 24, y - 80 + (ws.cards.length % 5) * 24); }
 
-function addCard(spec) {
-  const id = ws.nextId++;
+// Creates a card in workspace `w` (the active one unless restoring). Only the active workspace's cards are in the DOM.
+function addCard(spec, w = ws) {
+  const id = spec.id ?? uid();
   const el = document.createElement('div');
   el.className = 'card' + (spec.type === 'note' ? ' noteCard' : ''); el.dataset.id = id;
   el.style.left = spec.x + 'px'; el.style.top = spec.y + 'px'; if (spec.w) el.style.width = spec.w + 'px';
@@ -802,24 +1318,31 @@ function addCard(spec) {
   const docLabel = spec.source ? shortName(spec.source.docName) : '';
   el.innerHTML = `
     <div class="hd">${spec.source ? `<span class="src" title="Jump to source in ${escapeHtml(spec.source.docName)}"><b class="dn">${escapeHtml(docLabel)}</b> ↩ ${escapeHtml(srcLabel)}</span>` : `<span class="tag">Note</span>`}<button class="x" title="Delete">×</button></div>
-    ${spec.img ? `<img class="crop" src="${spec.img}" draggable="false">` : ''}
+    ${spec.blob ? `<img class="crop" draggable="false">` : ''}
     ${spec.text ? `<div class="txt">${escapeHtml(spec.text)}</div>` : ''}
-    <div class="note" contenteditable="true" data-ph="${spec.type === 'note' ? 'Type a note…' : 'Add a note to this clipping…'}">${escapeHtml(spec.note || '')}</div>
+    <div class="note" contenteditable="true" data-ph="${spec.type === 'note' ? 'Type a note…' : 'Add a note to this clipping…'}"></div>
     <div class="rz"></div>`;
-  cardsEl.appendChild(el);
-  const card = { id, el, type: spec.type, x: spec.x, y: spec.y, w: spec.w || 320, text: spec.text || '', source: spec.source || null };
-  ws.cards.push(card);
+  $('.note', el).textContent = spec.note || '';
+  const card = { id, el, type: spec.type, x: spec.x, y: spec.y, w: spec.w || 320, text: spec.text || '', source: spec.source || null, blob: spec.blob || null, imgUrl: null };
+  if (card.blob) {
+    const img = $('.crop', el); card.imgUrl = URL.createObjectURL(card.blob); img.src = card.imgUrl;
+    img.onload = () => { if (w === ws) drawEdges(); };                 // card height changes once the image is in
+  }
+  w.cards.push(card);
+  if (w === ws) { cardsEl.appendChild(el); if (card.source) addMarker(card); renderWsTabs(); refreshMaster(); }
+  card.note = spec.note || '';                 // kept on the object: innerText of a detached card (inactive workspace) loses line breaks
+  $('.note', el).addEventListener('input', e => { card.note = e.target.innerText; changed(); });
 
   // header drag / link / select
   const hd = $('.hd', el); let mv = null;
   hd.addEventListener('pointerdown', e => {
     if (e.target.closest('.x, .src')) return;
-    if (ws.tool === 'link') { linkClick(card); return; }
+    if (wsTool === 'link') { linkClick(card); return; }
     mv = { sx: e.clientX, sy: e.clientY, ox: card.x, oy: card.y }; hd.setPointerCapture(e.pointerId); selectCard(card); e.preventDefault();
   });
   hd.addEventListener('pointermove', e => { if (!mv) return; card.x = mv.ox + (e.clientX - mv.sx) / ws.z; card.y = mv.oy + (e.clientY - mv.sy) / ws.z; el.style.left = card.x + 'px'; el.style.top = card.y + 'px'; drawEdges(); });
-  hd.addEventListener('pointerup', () => mv = null);
-  el.addEventListener('pointerdown', e => { if (ws.tool === 'link' && !e.target.closest('.hd')) { linkClick(card); e.preventDefault(); } else if (!e.target.closest('.hd')) selectCard(card); }, true);
+  hd.addEventListener('pointerup', () => { if (mv && (card.x !== mv.ox || card.y !== mv.oy)) changed(); mv = null; });
+  el.addEventListener('pointerdown', e => { if (wsTool === 'link' && !e.target.closest('.hd')) { linkClick(card); e.preventDefault(); } else if (!e.target.closest('.hd')) selectCard(card); }, true);
   $('.x', el).onclick = () => removeCard(card);
   $('.src', el)?.addEventListener('click', () => {
     const d = docById(card.source.docId);
@@ -830,36 +1353,45 @@ function addCard(spec) {
   const rz = $('.rz', el); let rs = null;
   rz.addEventListener('pointerdown', e => { rs = { sx: e.clientX, ow: el.offsetWidth }; rz.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); });
   rz.addEventListener('pointermove', e => { if (!rs) return; card.w = Math.max(160, rs.ow + (e.clientX - rs.sx) / ws.z); el.style.width = card.w + 'px'; drawEdges(); });
-  rz.addEventListener('pointerup', () => rs = null);
-  return el;
+  rz.addEventListener('pointerup', () => { if (rs) changed(); rs = null; });
+  return card;
 }
 const shortName = n => n.replace(/\.pdf$/i, '').slice(0, 18);
 function selectCard(card) { ws.selected = card; $$('.card').forEach(c => c.classList.toggle('selected', card && c === card.el)); }
 function removeCard(card) {
   ws.cards = ws.cards.filter(c => c !== card); ws.edges = ws.edges.filter(e => e.from !== card.id && e.to !== card.id);
-  card.el.remove(); card.marker?.remove(); drawEdges();
+  if (ws.selected === card) ws.selected = null;
+  card.el.remove(); card.marker?.remove(); if (card.imgUrl) URL.revokeObjectURL(card.imgUrl);
+  drawEdges(); renderWsTabs(); refreshMaster(); changed();
 }
 document.addEventListener('keydown', e => {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
   if (e.target.closest('[contenteditable], input')) return;
   if (ws.selected) removeCard(ws.selected);
-  else if (selectedEdge) { ws.edges = ws.edges.filter(x => x !== selectedEdge); selectedEdge = null; drawEdges(); }
+  else if (selectedEdge) { ws.edges = ws.edges.filter(x => x !== selectedEdge); selectedEdge = null; drawEdges(); changed(); }
 });
 
-// margin marker on the PDF page → jump to the card
-function addMarker(cardEl) {
-  const card = ws.cards.find(c => c.el === cardEl); const p = docById(card.source.docId).pages[card.source.page - 1];
+// margin marker on the PDF page → jump to the card (only the active workspace's clippings have markers)
+function addMarker(card) {
+  if (!card?.source) return;
+  const p = docById(card.source.docId)?.pages[card.source.page - 1]; if (!p) return;   // source document closed / not loaded
   const m = document.createElement('div'); m.className = 'marker'; m.title = 'Show in workspace';
   m.style.background = `hsl(${card.source.hue} 60% 42%)`;
   m.style.top = card.source.bbox.y * 100 + '%';
-  m.onclick = () => { const r = wsEl.getBoundingClientRect(); ws.x = r.width / 2 - (card.x + card.el.offsetWidth / 2) * ws.z; ws.y = r.height / 2 - (card.y + card.el.offsetHeight / 2) * ws.z; applyView(); selectCard(card); };
+  m.onclick = () => focusCard(card);
   p.el.appendChild(m); card.marker = m;
+}
+function focusCard(card) {                    // pan the workspace so the card is centred, and select it
+  if (!ws.cards.includes(card)) return;
+  const r = wsEl.getBoundingClientRect();
+  ws.x = r.width / 2 - (card.x + card.el.offsetWidth / 2) * ws.z; ws.y = r.height / 2 - (card.y + card.el.offsetHeight / 2) * ws.z;
+  applyView(); selectCard(card);
 }
 
 // ---- links between cards
 function linkClick(card) {
   if (!ws.linkSrc) { ws.linkSrc = card; card.el.classList.add('linkSrc'); return; }
-  if (ws.linkSrc !== card) ws.edges.push({ id: ws.nextId++, from: ws.linkSrc.id, to: card.id, label: '' });
+  if (ws.linkSrc !== card) { ws.edges.push({ id: uid(), from: ws.linkSrc.id, to: card.id, label: '' }); changed(); }
   ws.linkSrc.el.classList.remove('linkSrc'); ws.linkSrc = null; drawEdges();
 }
 let selectedEdge = null;
@@ -883,7 +1415,7 @@ function editEdgeLabel(e, mx, my) {       // inline editor instead of prompt(): 
   const inp = document.createElement('input'); inp.className = 'edgeEdit'; inp.value = e.label; inp.placeholder = 'contradicts / supports / see also';
   inp.style.left = (r.left + ws.x + mx * ws.z - 80) + 'px'; inp.style.top = (r.top + ws.y + my * ws.z - 30) + 'px';
   document.body.appendChild(inp); inp.focus(); inp.select();
-  const done = () => { e.label = inp.value.trim(); inp.remove(); drawEdges(); };
+  const done = () => { const v = inp.value.trim(); if (v !== e.label) { e.label = v; changed(); } inp.remove(); drawEdges(); };
   inp.onblur = done; inp.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === 'Escape') inp.blur(); };
 }
 function edgePoint(card, toward) {        // point on the card's border in the direction of `toward`
@@ -900,6 +1432,376 @@ const divider = $('#divider'), readerWrap = $('#readerWrap'); let dv = null;
 divider.addEventListener('pointerdown', e => { dv = { sx: e.clientX, w: readerWrap.offsetWidth }; divider.setPointerCapture(e.pointerId); });
 divider.addEventListener('pointermove', e => { if (!dv) return; const w = Math.max(300, dv.w + e.clientX - dv.sx); readerWrap.style.flex = `0 0 ${w}px`; });
 divider.addEventListener('pointerup', () => dv = null);
+
+// =====================================================================
+//  CASE: serialise / deserialise (docs/SPEC-case-file.md §2–3)
+// =====================================================================
+let caseTitle = 'Untitled case', caseCreatedAt = new Date().toISOString(), caseUpdatedAt = caseCreatedAt;
+let fileName = null, filePath = null, fileDirty = false, changeSeq = 0;
+
+function workspaceJson(w) {
+  return {
+    id: w.id, title: w.title, createdAt: w.createdAt, view: { x: w.x, y: w.y, z: w.z },
+    cards: w.cards.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, w: c.w, text: c.text, note: c.note || '',
+      source: c.source ? { docId: c.source.docId, docName: c.source.docName, hue: c.source.hue, page: c.source.page, bbox: c.source.bbox, heading: c.source.heading ?? null } : null })),
+    edges: w.edges.map(e => ({ id: e.id, from: e.from, to: e.to, label: e.label || '' })),
+    strokes: w.strokes.map(s => ({ pts: s.pts, width: s.width })),
+  };
+}
+function buildCaseJson() {
+  return {
+    title: caseTitle, createdAt: caseCreatedAt, updatedAt: caseUpdatedAt,
+    readerView: view, activeDocumentId: doc?.id ?? null, activeWorkspaceId: ws.id,
+    documents: docs.map(d => ({ id: d.id, name: d.name, hue: d.hue, pageCount: d.pdf?.numPages ?? d.pages.length,
+      pages: d.pages.map(p => ({ n: p.n, w: p.w, h: p.h })), scrollTop: d.scrollTop || 0, scrollLeft: d.scrollLeft || 0 })),
+    workspaces: workspaces.map(workspaceJson),
+  };
+}
+const ocrOf = d => ({ pages: d.pages.map(p => p.ocrState === 'done' && p.words ? { n: p.n, source: p.source || 'ocr', words: p.words } : null) });
+const annotationsOf = d => ({ pages: d.pages.filter(p => p.annos.length).map(p => ({ n: p.n, items: p.annos.map(markOf) })) });
+const snapshot = () => ({
+  version: 1, case: buildCaseJson(),
+  ocr: Object.fromEntries(docs.map(d => [d.id, ocrOf(d)])),
+  annotations: Object.fromEntries(docs.map(d => [d.id, annotationsOf(d)])),
+  file: { name: fileName, path: filePath, dirty: fileDirty },
+});
+
+async function exportCaseBytes() {
+  if (!window.JSZip) throw new Error('JSZip did not load');
+  const zip = new JSZip(), cj = buildCaseJson();
+  const add = (path, data, opts) => zip.file(path, data, { createFolders: false, ...opts });
+  add('manifest.json', JSON.stringify({ format: 'lawcase', version: 1, app: 'Case Canvas', title: cj.title, createdAt: cj.createdAt, updatedAt: cj.updatedAt }, null, 2));
+  add('case.json', JSON.stringify(cj, null, 2));
+  for (const d of docs) {
+    add(`documents/${d.id}.pdf`, d.bytes, { compression: 'STORE' });
+    add(`ocr/${d.id}.json`, JSON.stringify(ocrOf(d)));
+    add(`annotations/${d.id}.json`, JSON.stringify(annotationsOf(d)));
+  }
+  for (const w of workspaces) for (const c of w.cards) if (c.blob) add(`clips/${c.id}.png`, c.blob, { compression: 'STORE' });
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+}
+async function readCaseZip(bytes) {
+  if (!window.JSZip) throw new Error('JSZip did not load');
+  const zip = await JSZip.loadAsync(bytes);
+  const read = (p, type = 'string') => zip.file(p)?.async(type) ?? Promise.resolve(null);
+  const manifest = JSON.parse(await read('manifest.json') || '{}');
+  if (manifest.format && manifest.format !== 'lawcase') throw new Error('Not a .lawcase file');
+  if (manifest.version > 1) console.warn(`.lawcase version ${manifest.version} is newer than this app (1); reading what it can`);
+  const cjText = await read('case.json'); if (!cjText) throw new Error('case.json is missing — not a .lawcase file');
+  const cj = JSON.parse(cjText); if (!cj.title && manifest.title) cj.title = manifest.title;
+  const pdfs = new Map(), clips = new Map(), ocr = {}, annotations = {};
+  for (const sd of cj.documents || []) {
+    const b = await read(`documents/${sd.id}.pdf`, 'arraybuffer'); if (b) pdfs.set(sd.id, b);
+    const o = await read(`ocr/${sd.id}.json`); if (o) ocr[sd.id] = JSON.parse(o);
+    const a = await read(`annotations/${sd.id}.json`); if (a) annotations[sd.id] = JSON.parse(a);
+  }
+  for (const w of cj.workspaces || []) for (const c of w.cards || []) {
+    const b = await read(`clips/${c.id}.png`, 'arraybuffer'); if (b) clips.set(c.id, new Blob([b], { type: 'image/png' }));
+  }
+  return { case: cj, pdfs, clips, ocr, annotations };
+}
+
+function clearCase() {                          // drops every document and workspace (no save, no UI rebuild)
+  hideSelection(); drawing = null; lasso = null;
+  for (const d of docs) { d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove(); d.pdf?.destroy(); }
+  docs.length = 0; doc = null;
+  for (const w of workspaces) {
+    w.cards.forEach(c => { c.el.remove(); c.marker?.remove(); if (c.imgUrl) URL.revokeObjectURL(c.imgUrl); });
+    w.strokes.forEach(s => s.el.remove());
+  }
+  workspaces.length = 0; ws = makeWorkspace('', 0);   // placeholder until the real workspaces exist
+  selectedEdge = null; drawEdges();
+  annoStack.length = 0; masterCollapsed.clear(); thumbsEl.innerHTML = '';
+  nextId = 1; caseTitle = 'Untitled case'; caseCreatedAt = caseUpdatedAt = new Date().toISOString();
+  fileName = filePath = null; fileDirty = false;
+}
+// Rebuilds the whole case from a case.json object plus its payloads ({ pdfs: Map, clips: Map, ocr: {}, annotations: {} }).
+async function loadCase(cj, src) {
+  restoring = true;
+  try {
+    clearCase();
+    const ids = [...(cj.documents || []).map(d => d.id), ...(cj.workspaces || []).flatMap(w => [w.id, ...(w.cards || []).map(c => c.id), ...(w.edges || []).map(e => e.id)])].filter(Number.isFinite);
+    nextId = Math.max(0, ...ids) + 1;
+    caseTitle = cj.title || 'Untitled case'; caseCreatedAt = cj.createdAt || caseCreatedAt; caseUpdatedAt = cj.updatedAt || caseCreatedAt;
+    setView();                                        // always the horizontal board, whatever an older case saved
+    for (const sd of cj.documents || []) {
+      const bytes = src.pdfs.get(sd.id);
+      if (!bytes) { console.warn(`Case document ${sd.name} has no PDF bytes — skipped`); continue; }
+      await openPdf({ name: sd.name, bytes: toArrayBuffer(bytes), id: sd.id, hue: sd.hue ?? pickHue(), ocr: src.ocr?.[sd.id], annotations: src.annotations?.[sd.id],
+        scrollTop: sd.scrollTop || 0, scrollLeft: sd.scrollLeft || 0, activate: false });
+    }
+    for (const sw of cj.workspaces || []) {
+      const w = makeWorkspace(sw.title || `Workspace ${workspaces.length + 1}`, sw.id ?? uid());
+      if (sw.createdAt) w.createdAt = sw.createdAt;
+      w.x = sw.view?.x ?? 40; w.y = sw.view?.y ?? 40; w.z = sw.view?.z ?? 1;
+      workspaces.push(w);
+      for (const c of sw.cards || []) {
+        const sd = c.source && docById(c.source.docId);
+        const source = c.source ? { ...c.source, docName: sd?.name || c.source.docName || 'document', hue: sd?.hue ?? c.source.hue ?? HUES[0] } : null;
+        addCard({ id: c.id, type: c.type || (source ? 'clipping' : 'note'), x: c.x || 0, y: c.y || 0, w: c.w, text: c.text, note: c.note, source, blob: src.clips?.get(c.id) || null }, w);
+      }
+      w.edges = (sw.edges || []).map(e => ({ id: e.id ?? uid(), from: e.from, to: e.to, label: e.label || '' }));
+      w.strokes = (sw.strokes || []).filter(s => s.pts?.length).map(s => { const st = { pts: s.pts, width: s.width || 2.2 }; st.el = makeStrokeEl(st); return st; });
+    }
+    if (!workspaces.length) workspaces.push(makeWorkspace('Workspace 1'));
+    switchWorkspace(workspaces.find(w => w.id === cj.activeWorkspaceId) || workspaces[0]);
+    const ad = docById(cj.activeDocumentId) || docs[0];
+    if (ad) activateDoc(ad); else { renderTabs(); renderTree(); renderThumbs(); $('#drop').classList.remove('hidden'); }
+  } finally { restoring = false; }
+  updateCaseUi();
+}
+function newCase() {
+  restoring = true;
+  try {
+    clearCase();
+    const w = makeWorkspace('Workspace 1'); workspaces.push(w); switchWorkspace(w);
+    setView(); renderTabs(); renderTree(); renderThumbs();
+    $('#drop').classList.remove('hidden'); setStatus('No document', 0);
+  } finally { restoring = false; }
+  resetStores = true; updateCaseUi();
+  return flushSave();
+}
+
+// =====================================================================
+//  AUTOSAVE → IndexedDB `casecanvas` { meta: current, pdfs: docId → ArrayBuffer, clips: cardId → Blob }
+// =====================================================================
+let dbPromise = null;
+function openDb() {
+  return dbPromise ||= new Promise((res, rej) => {
+    const r = indexedDB.open('casecanvas', 1);
+    r.onupgradeneeded = () => { for (const s of ['meta', 'pdfs', 'clips']) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s); };
+    r.onsuccess = () => res(r.result); r.onerror = () => { dbPromise = null; rej(r.error); };
+  });
+}
+const reqP = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const txDone = tx => new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = tx.onabort = () => rej(tx.error || new Error('IndexedDB transaction aborted')); });
+
+let saveTimer = null, saving = false, saveQueued = false, saveError = null, resetStores = false;
+// Every state change calls this. soft = view-only (scroll, pan, tab switch): saved, throttled, does not make the file "unsaved".
+function changed(soft = false) {
+  if (!booted || restoring) return;
+  if (!soft) { changeSeq++; caseUpdatedAt = new Date().toISOString(); if (!fileDirty) { fileDirty = true; updateTitle(); } }
+  if (soft && saveTimer) return;
+  clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 800);
+  updateSaveInd();
+}
+async function flushSave() {
+  clearTimeout(saveTimer); saveTimer = null;
+  if (saving) { saveQueued = true; return; }
+  saving = true; updateSaveInd();
+  try { await writeAutosave(); saveError = null; }
+  catch (err) { console.error('Autosave failed', err); saveError = err; }
+  saving = false;
+  if (saveQueued) { saveQueued = false; return flushSave(); }
+  updateSaveInd();
+}
+async function writeAutosave() {
+  const snap = snapshot();
+  const db = await openDb();
+  const tx = db.transaction(['meta', 'pdfs', 'clips'], 'readwrite'), done = txDone(tx);
+  const reset = resetStores; resetStores = false;
+  tx.objectStore('meta').put(snap, 'current');
+  const sync = (name, items) => {               // put what is missing, delete what is gone (bytes never change for a given id)
+    const st = tx.objectStore(name);
+    if (reset) { st.clear(); items.forEach((v, k) => st.put(v, k)); return; }
+    const r = st.getAllKeys();
+    r.onsuccess = () => { const have = new Set(r.result); items.forEach((v, k) => { if (!have.has(k)) st.put(v, k); }); have.forEach(k => { if (!items.has(k)) st.delete(k); }); };
+  };
+  sync('pdfs', new Map(docs.map(d => [d.id, d.bytes])));
+  sync('clips', new Map(workspaces.flatMap(w => w.cards.filter(c => c.blob).map(c => [c.id, c.blob]))));
+  try { await done; } catch (err) { if (reset) resetStores = true; throw err; }
+}
+async function restoreAutosave() {
+  const db = await openDb();
+  const tx = db.transaction(['meta', 'pdfs', 'clips'], 'readonly');
+  const snap = await reqP(tx.objectStore('meta').get('current'));
+  if (!snap?.case) return false;
+  const pdfs = new Map(), clips = new Map();
+  const cardIds = (snap.case.workspaces || []).flatMap(w => (w.cards || []).filter(c => c.type === 'clipping').map(c => c.id));
+  await Promise.all([
+    ...(snap.case.documents || []).map(sd => reqP(tx.objectStore('pdfs').get(sd.id)).then(b => b && pdfs.set(sd.id, b))),
+    ...cardIds.map(id => reqP(tx.objectStore('clips').get(id)).then(b => b && clips.set(id, b))),
+  ]);
+  await loadCase(snap.case, { pdfs, clips, ocr: snap.ocr || {}, annotations: snap.annotations || {} });
+  fileName = snap.file?.name || null; filePath = snap.file?.path || null; fileDirty = !!snap.file?.dirty;
+  return true;
+}
+addEventListener('pagehide', () => { if (saveTimer) flushSave(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && saveTimer) flushSave(); });
+
+// =====================================================================
+//  CASE MENU: New / Open / Save / Save as, title, save indicator, desktop bridge
+// =====================================================================
+let caseOp = Promise.resolve();                 // case-level operations (restore, open, new) run one at a time
+function queueCaseOp(fn) { const run = caseOp.then(() => fn()); caseOp = run.catch(() => {}); return run; }
+
+function updateSaveInd() {
+  const el = $('#saveInd'); let t, cls = '';
+  if (saveError) { t = 'Autosave failed'; cls = 'err'; }
+  else if (saveTimer || saving) t = 'Saving…';
+  else if ((fileName || filePath) && fileDirty) { t = 'Unsaved changes'; cls = 'dirty'; }
+  else t = 'Saved';
+  el.textContent = t; el.className = cls;
+  el.title = saveError ? String(saveError.message || saveError) : (filePath || fileName ? `Case file: ${filePath || fileName}` : 'Autosaved in this browser');
+}
+function updateTitle() {
+  const t = `${fileDirty ? '• ' : ''}${caseTitle} — Case Canvas`;
+  if (document.title !== t) { document.title = t; try { desktop?.setTitle(t); } catch (err) { console.error(err); } }
+}
+function updateCaseUi() {
+  const ti = $('#caseTitle'); if (document.activeElement !== ti) ti.value = caseTitle;
+  updateTitle(); updateSaveInd();
+}
+const titleEl = $('#caseTitle');
+titleEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') { if (e.key === 'Escape') titleEl.value = caseTitle; titleEl.blur(); } e.stopPropagation(); });
+titleEl.addEventListener('change', () => {
+  const v = titleEl.value.trim() || 'Untitled case'; titleEl.value = v;
+  if (v !== caseTitle) { caseTitle = v; changed(); updateTitle(); }
+});
+
+const hasContent = () => docs.length > 0 || workspaces.some(w => w.cards.length || w.strokes.length);
+const confirmDiscard = () => !fileDirty || !hasContent() || confirm(`“${caseTitle}” has changes that are not saved to a case file. Discard them?`);
+const suggestedName = () => fileName || (caseTitle.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'case') + '.lawcase';
+function downloadBytes(bytes, name, mime = 'application/zip') {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: mime })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+async function saveCase(as = false) {
+  const seq = changeSeq;
+  try {
+    const bytes = await exportCaseBytes();
+    if (desktop) {
+      const res = await desktop.saveCase(bytes, as ? null : filePath, suggestedName());
+      if (!res) return false;                     // dialog cancelled
+      filePath = res.path; fileName = res.name;
+    } else {
+      let name = suggestedName();
+      if (as) { const n = prompt('Save case as', name); if (!n) return false; name = /\.lawcase$/i.test(n.trim()) ? n.trim() : n.trim() + '.lawcase'; }
+      downloadBytes(bytes, name); fileName = name;
+    }
+    fileDirty = changeSeq !== seq;                // edits made while writing keep the file "unsaved"
+    updateCaseUi(); flushSave();
+    setStatus(`Saved ${fileName}`);
+    return true;
+  } catch (err) { console.error(err); setStatus(`Save failed: ${err.message}`); return false; }
+}
+function importCaseBytes(bytes, name = 'case.lawcase', path = null) {
+  return queueCaseOp(async () => {
+    const src = await readCaseZip(bytes);       // validates before anything is cleared
+    await loadCase(src.case, src);
+    fileName = name; filePath = path; fileDirty = false; resetStores = true;
+    updateCaseUi(); await flushSave();
+  });
+}
+async function openCaseUI() {
+  if (!confirmDiscard()) return;
+  if (!desktop) { $('#caseFile').click(); return; }
+  const f = await desktop.openCase(); if (!f) return;
+  openCaseBytesUI(f.bytes, f.name, f.path);
+}
+const openCaseBytesUI = (bytes, name, path) => importCaseBytes(bytes, name, path)
+  .then(() => setStatus(`Opened ${name}`)).catch(err => { console.error(err); setStatus(`Could not open ${name}: ${err.message}`); alert(`Could not open ${name}:\n${err.message}`); });
+async function openCaseFromWebFile(f, confirmed = false) {
+  if (!confirmed && !confirmDiscard()) return;
+  openCaseBytesUI(new Uint8Array(await f.arrayBuffer()), f.name, null);
+}
+$('#caseFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) openCaseFromWebFile(f, true); });
+const newCaseUI = () => { if (confirmDiscard()) queueCaseOp(newCase); };
+function caseAction(a) {
+  ({ new: newCaseUI, open: openCaseUI, save: () => saveCase(false), saveAs: () => saveCase(true), openPdf: openPdfUI, exportPdf: exportPdfUI })[a]?.();
+}
+
+// =====================================================================
+//  EXPORT the active document as a PDF: original pages + mark-up burned in + invisible OCR text (searchable)
+// =====================================================================
+$('#exportPdfBtn').onclick = () => exportPdfUI();
+async function exportPdfUI() {
+  if (!doc) { setStatus('Open a document first'); return; }
+  setStatus(`Exporting ${doc.name}…`);
+  try {
+    const bytes = await exportDocumentPdf(doc);
+    const name = doc.name.replace(/\.pdf$/i, '') + ' (marked up).pdf';
+    if (desktop?.saveFile) { const r = await desktop.saveFile(bytes, name, { name: 'PDF document', extensions: ['pdf'] }); setStatus(r ? `Exported ${r.name}` : 'Export cancelled'); }
+    else { downloadBytes(bytes, name, 'application/pdf'); setStatus(`Exported ${name}`); }
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message); }
+}
+const hexRgb = h => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h || ''); return m ? PDFLib.rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : PDFLib.rgb(0.1, 0.3, 0.65); };
+async function exportDocumentPdf(d) {
+  const { PDFDocument, StandardFonts, BlendMode, LineCapStyle, rgb } = PDFLib;
+  const pdf = await PDFDocument.load(d.bytes, { ignoreEncryption: true });
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const pages = pdf.getPages();
+  for (const p of d.pages) {
+    const page = pages[p.n - 1]; if (!page) continue;
+    const { width: W, height: H } = page.getSize();
+    const k = W / 1000;                                   // mark-up units → PDF points
+    // 1) invisible text layer for scanned pages, so the exported file is searchable and selectable
+    if (p.source === 'ocr' && p.words) for (const w of p.words) {
+      const text = w.text.replace(/[^\x20-\x7E]/g, '');  // Helvetica's WinAnsi-safe subset
+      if (!text) continue;
+      const size = Math.max(3, w.h * H * 0.85);
+      page.drawText(text, { x: w.x * W, y: H - (w.y + w.h) * H + size * 0.2, size, font, opacity: 0 });
+    }
+    // 2) mark-up
+    for (const a of p.annos) {
+      if ((a.kind === 'pen' || a.kind === 'hl') && a.pts?.length) {
+        const path = a.pts.map((q, i) => (i ? 'L' : 'M') + (q[0] * k).toFixed(2) + ' ' + (q[1] * k).toFixed(2)).join(' ') + (a.pts.length === 1 ? ' l0.1 0' : '');
+        page.drawSvgPath(path, { x: 0, y: H, borderColor: hexRgb(a.color), borderWidth: (a.width || 3) * k, borderOpacity: a.opacity ?? 1,
+          borderLineCap: LineCapStyle.Round, ...(a.kind === 'hl' ? { blendMode: BlendMode.Multiply } : {}) });
+      } else if (a.kind === 'hl' && a.rect) {
+        page.drawRectangle({ x: a.rect.x * k, y: H - (a.rect.y + a.rect.h) * k, width: a.rect.w * k, height: a.rect.h * k, color: hexRgb(a.color), opacity: a.opacity ?? 0.45, blendMode: BlendMode.Multiply });
+      } else if (a.kind === 'note' && a.rect) {
+        const size = 9, pad = 5, boxW = Math.max(60, a.rect.w * k), text = (a.text || '').trim();
+        const lines = [];
+        for (const para of text.split(/\n/)) { let cur = ''; for (const word of para.split(/\s+/)) { const t = (cur + ' ' + word).trim(); if (font.widthOfTextAtSize(t, size) <= boxW - 2 * pad || !cur) cur = t; else { lines.push(cur); cur = word; } } lines.push(cur); }
+        const boxH = Math.max(a.rect.h * k, lines.length * size * 1.3 + 2 * pad + 10);
+        const x = a.rect.x * k, yTop = H - a.rect.y * k;
+        page.drawRectangle({ x, y: yTop - boxH, width: boxW, height: boxH, color: rgb(1, 0.965, 0.66), borderColor: rgb(0.85, 0.78, 0.35), borderWidth: 0.6, opacity: 0.95 });
+        page.drawRectangle({ x, y: yTop - 10, width: boxW, height: 10, color: rgb(0.95, 0.89, 0.48) });
+        lines.forEach((ln, i) => page.drawText(ln.replace(/[^\x20-\x7E]/g, ''), { x: x + pad, y: yTop - 10 - pad - size * (i + 1) * 1.3 + size * 0.3, size, font, color: rgb(0.2, 0.17, 0.1) }));
+      }
+    }
+  }
+  pdf.setProducer('Case Canvas — Stuthi Labs Private Limited');
+  return await pdf.save();
+}
+$('#caseBtn').addEventListener('click', e => { $('#caseMenu').classList.toggle('show'); e.stopPropagation(); });
+document.addEventListener('click', e => { if (!e.target.closest('#caseMenuWrap')) $('#caseMenu').classList.remove('show'); });
+$('#caseMenu').addEventListener('click', e => { const b = e.target.closest('[data-case]'); if (!b) return; $('#caseMenu').classList.remove('show'); caseAction(b.dataset.case); });
+// Keyboard shortcuts on the web only: on desktop the native menu's accelerators handle them (binding both fires twice).
+if (!desktop) document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 's') { e.preventDefault(); saveCase(e.shiftKey); }
+  else if (k === 'o') { e.preventDefault(); openCaseUI(); }
+});
+// Double-clicked / "Open with" .lawcase from the shell: waits for the startup restore, then replaces it.
+function onDesktopOpenFile(f) {
+  queueCaseOp(() => {}).then(() => { if (confirmDiscard()) openCaseBytesUI(f.bytes, f.name, f.path); });
+}
+
+// For the desktop shell and tests.
+function caseState() {
+  return {
+    booted, title: caseTitle, readerView: view, fileName, filePath, dirty: fileDirty,
+    saving: !!(saveTimer || saving), saveError: saveError ? String(saveError.message || saveError) : null,
+    activeDocumentId: doc?.id ?? null, activeWorkspaceId: ws.id,
+    documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length, ocrDone: d.pages.filter(p => p.ocrState === 'done').length, headings: d.index.length, marks: d.pages.reduce((s, p) => s + p.annos.length, 0), scrollTop: d.scrollTop || 0 })),
+    workspaces: workspaces.map(w => ({ id: w.id, title: w.title, cards: w.cards.length, clippings: w.cards.filter(c => c.type === 'clipping').length, edges: w.edges.length, strokes: w.strokes.length, view: { x: w.x, y: w.y, z: w.z } })),
+  };
+}
+window.caseApp = {
+  exportDocumentPdf: () => exportDocumentPdf(doc),
+  exportCaseBytes, importCaseBytes, newCase: () => queueCaseOp(newCase), state: caseState,
+  save: () => saveCase(false), saveAs: () => saveCase(true), flush: flushSave, ready: () => caseOp, caseJson: buildCaseJson,
+};
+
+// ---- boot: show the default workspace, then silently restore the autosaved case
+switchWorkspace(ws); renderTree(); updateCaseUi();
+queueCaseOp(async () => {
+  try { await restoreAutosave(); } catch (err) { console.error('Restore failed', err); }
+  booted = true; updateCaseUi();
+});
 </script>
 </body>
 </html>

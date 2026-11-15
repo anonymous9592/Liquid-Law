@@ -1,10 +1,91 @@
 'use strict';
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, net, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
+const { execFile } = require('child_process');
 
 const isDev = !app.isPackaged;
+
+// ---- profile isolation: development runs and explicit test runs never share the installed app's data
+// (shared Chromium profiles were corrupting the autosave database and the OS-crypto key store).
+{
+  const profileArg = process.argv.find(a => a.startsWith('--profile='));
+  const suffix = profileArg ? profileArg.slice('--profile='.length) : (isDev ? 'Dev' : '');
+  if (suffix) app.setPath('userData', path.join(app.getPath('appData'), `Case Canvas ${suffix.replace(/[\\/:*?"<>|]/g, '_')}`));
+}
+
+// ---- secrets (API keys) kept in <userData>/settings.json.
+// On Windows they are protected with DPAPI directly (user scope, via PowerShell's ProtectedData), which does not
+// depend on Chromium's per-profile key store: that store was being regenerated between runs, which silently made
+// keys saved with Electron's safeStorage unreadable. safeStorage is still used on other platforms and to read
+// older records.
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+function readSettings() { try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch { return {}; } }
+function writeSettings(s) { fs.mkdirSync(path.dirname(settingsFile()), { recursive: true }); fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2)); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function dpapi(op, b64) {        // op: 'Protect' | 'Unprotect'; input and output are base64 strings
+  const script = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Security; ` +
+    `$in=[Convert]::FromBase64String('${b64}'); ` +
+    `$out=[Security.Cryptography.ProtectedData]::${op}($in,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser); ` +
+    `[Convert]::ToBase64String($out)`;
+  return new Promise((resolve, reject) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true, timeout: 15000 }, (err, stdout, stderr) => {
+        if (err) return reject(new Error((stderr || err.message).trim().split('\n')[0]));
+        resolve(stdout.trim());
+      });
+  });
+}
+const toB64 = s => Buffer.from(String(s), 'utf8').toString('base64');
+const fromB64 = b => Buffer.from(b, 'base64').toString('utf8');
+
+const secretCache = new Map();   // decrypted values for this process: DPAPI via PowerShell costs ~3 s per call
+async function getSecret(name) {
+  if (secretCache.has(name)) return secretCache.get(name);
+  const v = await readSecret(name);
+  secretCache.set(name, v);
+  return v;
+}
+async function readSecret(name) {
+  const rec = readSettings().secrets?.[name]; if (!rec) return null;
+  if (!rec.enc) return rec.v;
+  if (rec.enc === 'dpapi') return fromB64(await dpapi('Unprotect', rec.v));
+  // legacy record written with safeStorage
+  await app.whenReady();
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { return safeStorage.decryptString(Buffer.from(rec.v, 'base64')); }
+    catch (err) { lastErr = err; await sleep(250); }
+  }
+  console.error('[main] getSecret failed:', lastErr && lastErr.message);
+  throw new Error('The saved key could not be read on this Windows account. Please enter it again in Settings.');
+}
+async function setSecret(name, value) {
+  const s = readSettings(); s.secrets = s.secrets || {};
+  secretCache.delete(name);
+  if (value == null || value === '') { delete s.secrets[name]; writeSettings(s); return; }
+  const plain = String(value);
+  secretCache.set(name, plain);
+  let rec = null;
+  if (process.platform === 'win32') {
+    try {
+      const v = await dpapi('Protect', toB64(plain));
+      if (fromB64(await dpapi('Unprotect', v)) === plain) rec = { v, enc: 'dpapi' };   // prove the round trip before trusting it
+    } catch (err) { console.error('[main] DPAPI round-trip failed:', err.message); }
+  }
+  if (!rec && safeStorage.isEncryptionAvailable()) {
+    try {
+      const v = safeStorage.encryptString(plain).toString('base64');
+      if (safeStorage.decryptString(Buffer.from(v, 'base64')) === plain) rec = { v, enc: true };
+    } catch (err) { console.error('[main] safeStorage round-trip failed:', err.message); }
+  }
+  s.secrets[name] = rec || { v: plain, enc: false, note: 'stored without OS encryption because no protected store could round-trip' };
+  writeSettings(s);
+}
+ipcMain.handle('desktop:getSecret', async (_e, name) => getSecret(String(name)));
+ipcMain.handle('desktop:setSecret', async (_e, name, value) => { await setSecret(String(name), value); });
 const ROOT = isDev
   ? path.join(__dirname, '..', 'prototype')
   : path.join(process.resourcesPath, 'prototype');
@@ -109,7 +190,9 @@ function createWindow() {
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false, sandbox: false
+      contextIsolation: true, nodeIntegration: false, sandbox: false,
+      // a long OCR / translation run keeps going at full speed while the window sits behind another app
+      backgroundThrottling: false
     }
   });
   win.once('ready-to-show', () => win.show());

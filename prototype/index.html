@@ -34,7 +34,16 @@
   #status { margin-left: auto; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
   #bar { width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
   #bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-  #search { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 180px; }
+  /* find: a small icon at the right end of the bar; the box drops down from it (Ctrl+F) */
+  #findWrap { position: relative; flex: none; }
+  #findBtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #findBox { position: absolute; top: 38px; right: 0; z-index: 60; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 6px; display: none; align-items: center; gap: 2px; }
+  #findBox.show { display: flex; }
+  #search { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 220px; margin-right: 4px; }
+  #findCount { color: var(--muted); font-size: 12px; min-width: 52px; text-align: center; white-space: nowrap; }
+  #findBox .fb { border: 0; background: transparent; cursor: pointer; padding: 4px 7px; border-radius: 6px; color: var(--ink); font-size: 13px; line-height: 1; }
+  #findBox .fb:hover { background: #f3f1ec; }
+  #findBox .fb:disabled { color: var(--muted); cursor: default; background: transparent; }
 
   /* ---------- case menu + title + save indicator ---------- */
   #caseMenuWrap { position: relative; }
@@ -68,6 +77,37 @@
   .mClip { display: block; padding: 2px 6px 2px 8px; font-size: 12px; color: #3b3732; cursor: pointer; border-left: 2px solid var(--dc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 0 4px 4px 0; font-family: Georgia, "Times New Roman", serif; margin: 1px 0; }
   .mClip:hover { background: #f3f1ec; }
   .mEmpty { color: var(--muted); font-size: 12px; padding: 3px 6px 3px 22px; }
+  /* closed documents (round 4 §2): grouped last, greyed, with a "closed" tag and Reopen */
+  .mDivider { display: flex; align-items: center; gap: 8px; margin: 12px 4px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .mDivider::before, .mDivider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .mGroup.closed { --dc: #a9a39a; }
+  .mGroup.closed .mHead .nm, .mGroup.closed .mBody { opacity: .6; }
+  .mGroup.closed .mHead { flex-wrap: wrap; row-gap: 1px; }
+  .mGroup.closed .mHead .nm { min-width: 60px; }
+  .mGroup.closed .mHead .ct { flex-basis: 100%; padding-left: 30px; }
+  .mHead .ctag { font-size: 10px; font-weight: 500; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; line-height: 15px; flex: none; }
+  .mHead .reopen { font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer; flex: none; }
+  .mHead .reopen:hover { text-decoration: underline; }
+  .mHead input.miEdit { flex: 1; min-width: 0; font: inherit; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
+  #transMenu button.danger { color: #c0392b; }
+  #transMenu button.danger:hover { background: #c0392b; color: #fff; }
+  .btn.danger { background: #c0392b; border-color: #c0392b; color: #fff; }
+  .btn.danger:hover { background: #a93226; }
+  #confirmDlg { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(440px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.25); color: var(--ink); }
+  #confirmDlg::backdrop { background: rgba(30,28,25,.35); }
+  #confirmDlg form { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  #confirmDlg h2 { margin: 0; font-size: 16px; }
+  #confirmDlg p { margin: 0; font-size: 13px; line-height: 1.5; }
+  #confirmDlg .foot { display: flex; justify-content: flex-end; gap: 8px; }
+  #drop.inReader { inset: 0; padding: 0 24px; text-align: center; }
+  #dropNote { font-size: 12px; color: var(--accent); }
+  /* manual index entries (round 3 §5) */
+  #idxBar { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; }
+  #idxBar[hidden] { display: none; }
+  #idxBar .hint { font-size: 11px; color: var(--muted); }
+  .node .mi { color: var(--accent); font-size: 11px; margin-right: 4px; }
+  .node input.miEdit { font: inherit; width: calc(100% - 50px); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
+  #index.dropHover { outline: 2px dashed var(--accent); outline-offset: -5px; background: color-mix(in srgb, var(--accent-soft) 55%, var(--panel)); }
 
   /* ---------- layout ---------- */
   #main { display: flex; height: calc(100% - 48px); }
@@ -103,10 +143,11 @@
   .page { position: relative; background: #fff; box-shadow: var(--shadow); }
 
   /* ---------- board view: horizontal, overlapping pages on a whiteboard ---------- */
-  #reader.board { touch-action: pan-x pinch-zoom; background: #fbfbf9;
+  #reader.board { touch-action: pan-x pan-y; background: #fbfbf9;   /* two-finger pinch zooms the pages (round 3 §1), not the window */
     background-image: linear-gradient(rgba(40,40,60,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(40,40,60,.045) 1px, transparent 1px);
     background-size: 40px 40px; box-shadow: inset 0 0 120px rgba(0,0,0,.06); }
-  #reader.board .pages { flex-direction: row; align-items: center; gap: 28px; width: max-content; min-width: 100%; height: 100%; padding: 36px 60px 110px 60px; }
+  /* min-height (not height): a zoomed page taller than the pane grows the strip, so its top is never cut off above scrollTop 0 */
+  #reader.board .pages { flex-direction: row; align-items: center; gap: 28px; width: max-content; min-width: 100%; min-height: 100%; padding: 36px 60px 110px 60px; }
   #reader.board .page { flex: none; box-shadow: 0 6px 20px rgba(0,0,0,.14), 0 1px 3px rgba(0,0,0,.1); }
   #reader.board .pageNo, #reader.board .ocrTag { top: auto; bottom: -18px; }
 
@@ -124,6 +165,7 @@
   #toolPop .wd { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: grid; place-items: center; cursor: pointer; }
   #toolPop .wd.on { border-color: var(--ink); background: #f1eee8; }
   #toolPop .wd i { display: block; background: var(--ink); border-radius: 99px; width: 14px; }
+  #toolPop .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
   /* ---------- annotation layer ---------- */
   .anno { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
@@ -156,7 +198,7 @@
   .textLayer span.hit { background: rgba(255, 196, 0, .45); }
   .textLayer span.inlasso { background: rgba(43,108,176,.25); }
   .tool-hand .textLayer, .tool-lasso .textLayer { pointer-events: none; user-select: none; }
-  .ovl { position: absolute; inset: 0; pointer-events: none; }
+  .ovl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }   /* sized: an <svg> otherwise stays 300×150 */
   .tool-lasso .ovl { pointer-events: auto; cursor: crosshair; }
   .ovl path.lasso { fill: rgba(43,108,176,.12); stroke: var(--lasso); stroke-width: 1.5; stroke-dasharray: 4 3; }
   .ovl rect.flash { fill: none; stroke: var(--accent); stroke-width: 3; animation: flash 1.6s ease-out forwards; }
@@ -209,17 +251,133 @@
   .card .hd .x { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
   .card .crop { display: block; width: 100%; background: #fff; border-bottom: 1px solid var(--line); }
   .card .txt { padding: 8px 10px; font-size: 13px; color: #3b3732; max-height: 140px; overflow: auto; white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif; }
-  .card .note { padding: 8px 10px; min-height: 48px; outline: none; font-size: 13px; white-space: pre-wrap; }
-  .card .note:empty::before { content: attr(data-ph); color: var(--muted); }
+  .card .txt[hidden] { display: none; }
+  .card .txt.empty { color: var(--muted); font-style: italic; font-family: inherit; font-size: 12px; }
+  /* clipping text: "Text ▾" disclosure + original / translated pill (round 3 §2) */
+  .card .txRow { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 10px; border-bottom: 1px solid var(--line); background: #fcfbf8; user-select: none; }
+  .card .txTog { border: 0; background: transparent; padding: 2px 0; font: 600 12px/1.2 inherit; color: #5b5650; cursor: pointer; }
+  .card .txTog:hover { color: var(--ink); }
+  .card .txTog .cnt { font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .card .lang { margin-left: auto; display: inline-flex; border-radius: 999px; overflow: hidden; font-size: 11px; line-height: 1; }
+  .card .lang button { border: 1px solid; background: #fff; padding: 3px 8px; cursor: pointer; font: inherit; font-weight: 600; }
+  .card .lang button + button { margin-left: -1px; }
+  .card .lang .lo { --lc: #D97757; border-color: var(--lc); color: var(--lc); border-radius: 999px 0 0 999px; }
+  .card .lang .lt { --lc: #2e9e5b; border-color: var(--lc); color: var(--lc); border-radius: 0 999px 999px 0; }
+  .card .lang button.on { background: var(--lc); color: #fff; }
+  .card .lang .lt.dim { opacity: .45; border-style: dashed; }
+  .card .lang .lt.dim:hover { opacity: .8; }
+  .card .lang .lt.busy { opacity: .7; cursor: progress; animation: langBusy 1s ease-in-out infinite alternate; }
+  @keyframes langBusy { to { opacity: .35; } }
+  /* the note box reads as "your note", never as extracted text (round 3 §3) */
+  .card .noteBox { position: relative; margin: 6px; padding: 16px 8px 6px; background: #fffbe6; border: 1px solid #eadfa8; border-radius: 6px; }
+  .card .noteBox .nl { position: absolute; left: 8px; top: 3px; font-size: 10px; line-height: 12px; letter-spacing: .06em; text-transform: uppercase; color: #a8995a; pointer-events: none; user-select: none; }
+  .card .note { min-height: 36px; outline: none; font-size: 13px; white-space: pre-wrap; color: var(--ink); font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif; }
+  .card .note:empty::before { content: attr(data-ph); color: #a79e86; font-style: italic; }
+  .card .noteBox:focus-within { border-color: #d8c56d; box-shadow: 0 0 0 2px rgba(234,223,168,.6); }
   .card.noteCard .note { min-height: 100px; font-size: 14px; }
   .card .rz { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #cfc9bf 50%); }
-  #wsHint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 12px; pointer-events: none; }
 
   #ghost { position: fixed; z-index: 999; pointer-events: none; background: #fff; border: 1px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow); padding: 6px 10px; font-size: 12px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none; }
 
   #drop { position: absolute; inset: 48px 0 0 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--muted); background: rgba(243,241,236,.92); z-index: 20; }
   #drop.hidden { display: none; }
   #drop .big { font-size: 20px; color: var(--ink); font-weight: 600; }
+
+  /* ---------- samples dropdown + settings ---------- */
+  .ddWrap { position: relative; }
+  .dd { position: absolute; top: 38px; left: 0; z-index: 60; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 4px; min-width: 200px; display: none; }
+  .dd.show { display: block; }
+  .dd button { display: block; width: 100%; border: 0; background: transparent; padding: 7px 10px; border-radius: 6px; cursor: pointer; text-align: left; color: var(--ink); white-space: nowrap; }
+  .dd button:hover { background: #f3f1ec; }
+  #settingsDlg { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(460px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.25); color: var(--ink); }
+  #settingsDlg::backdrop { background: rgba(30,28,25,.35); }
+  #settingsDlg form { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  #settingsDlg h2 { margin: 0; font-size: 16px; }
+  #settingsDlg h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  #settingsDlg section { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+  #settingsDlg label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+  #settingsDlg input, #settingsDlg select { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; width: 250px; background: #fff; }
+  #settingsDlg .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #settingsDlg .hint { margin: 0; font-size: 11px; color: var(--muted); }
+  #testKeyRes { font-size: 12px; }
+  #testKeyRes.ok, #keySaveRes.ok { color: #1e8449; } #testKeyRes.bad, #keySaveRes.bad { color: #c0392b; }
+  #keySaveRes { font-size: 12px; } #keySaveRes:empty { display: none; }
+  #reocrBanner { background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+  #settingsDlg .foot { display: flex; justify-content: flex-end; }
+  #toast { position: fixed; z-index: 1001; left: 50%; bottom: 40px; transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 10px; padding: 8px 14px; font-size: 13px; box-shadow: var(--shadow); display: none; align-items: center; gap: 10px; }
+  #toast.show { display: flex; }
+  #toast button { border: 0; background: #ffd27a; color: var(--ink); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
+
+  /* ---------- translation overlay (Lens-style patches) ---------- */
+  #pdfTools .tb.trans { font-size: 13px; font-weight: 700; letter-spacing: -.5px; }
+  .page .trans { position: absolute; inset: 0; pointer-events: none; }   /* scoped: the 文A button has class "trans" too */
+  .pages:not(.transOn) .trans { display: none; }
+  .trans .block { position: absolute; overflow: hidden; line-height: 1.15; padding: 2px; border-radius: 3px; font-family: 'Segoe UI', Arial, sans-serif;
+    overflow-wrap: anywhere; box-shadow: 0 0 0 1px rgba(0,0,0,.04); animation: transIn .35s ease-out; cursor: pointer; user-select: none;
+    touch-action: none; transition: opacity .12s; pointer-events: auto; box-sizing: border-box; }
+  .trans .block.single { white-space: nowrap; display: flex; align-items: center; }
+  .trans .block.peek, .trans .block.lift { opacity: 0; }
+  .trans .block.lift { pointer-events: none; }
+  .trans .block.pinned { background: none; box-shadow: none; outline: 1px dashed rgba(43,108,176,.35); animation: none; cursor: context-menu; }
+  .trans .block.pinned:hover { outline-color: rgba(43,108,176,.9); }
+  .trans .block.editing { cursor: text; user-select: text; white-space: pre-wrap; outline: 2px solid var(--accent); overflow: visible; z-index: 2; display: block; }
+  .trans .block mark.hit { background: rgba(255,196,0,.6); color: inherit; border-radius: 2px; }
+  .tool-select .trans .block, .tool-lasso .trans .block, .tool-pen .trans .block, .tool-hl .trans .block, .tool-erase .trans .block, .tool-note .trans .block { pointer-events: none; }
+  .tool-select .trans .block.pinned { pointer-events: none; }
+  @keyframes transIn { from { opacity: 0; filter: blur(2px); } }
+  #transMenu { position: fixed; z-index: 1002; min-width: 230px; padding: 4px; display: none; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  #transMenu.show { display: flex; }
+  #transMenu button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 6px; cursor: pointer; font: inherit; color: var(--ink); }
+  #transMenu button:hover { background: var(--accent); color: #fff; }
+  #transMenu button:disabled { color: var(--muted); background: none; cursor: default; }
+  #transMenu hr { border: 0; border-top: 1px solid var(--line); margin: 3px 2px; }
+  #transMenu .dim { color: var(--muted); font-size: 11px; padding: 4px 10px 2px; }
+  /* region translate tool (⬚文) */
+  #reader.tool-region { touch-action: none; }
+  .tool-region .ovl { pointer-events: auto; cursor: crosshair; }
+  .tool-region .textLayer { pointer-events: none; user-select: none; }
+  .tool-region .trans .block { pointer-events: none; }
+  .ovl rect.region { fill: rgba(181,84,45,.10); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 3; }
+  .ovl rect.region.busy { animation: regionBusy 1s linear infinite; }
+  @keyframes regionBusy { to { stroke-dashoffset: -16; } }
+  #pdfTools .tb.region { font-size: 12px; font-weight: 700; letter-spacing: -1px; }
+  #pdfTools .tb.zm { font-size: 18px; font-weight: 600; }
+  #pdfTools .tb.zfit { font-size: 14px; }
+  /* HUD over the PDF pane: Original | Translated view toggle + progress / error banner */
+  #readerHud { position: absolute; left: 12px; right: 62px; top: 44px; z-index: 12; display: flex; align-items: flex-start; gap: 8px; pointer-events: none; }
+  #readerHud > * { pointer-events: auto; }
+  #viewSeg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.96); box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+  #viewSeg[hidden] { display: none; }
+  #viewSeg button { border: 0; background: transparent; padding: 4px 11px; font-size: 12px; cursor: pointer; color: var(--ink); }
+  #viewSeg button + button { border-left: 1px solid var(--line); }
+  #viewSeg button.on { background: var(--accent); color: #fff; }
+  #viewSeg button.none { color: var(--muted); }
+  #transBanner { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 11px; border-radius: 8px; font-size: 12px;
+    background: rgba(255,255,255,.97); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.1); color: var(--ink); }
+  #transBanner[hidden] { display: none; }
+  #transBanner.busy { border-color: #e7c9b9; }
+  #transBanner.busy::before { content: ""; width: 10px; height: 10px; flex: none; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; }
+  #transBanner.ok { border-color: #b9dcc6; color: #1e6b3d; }
+  #transBanner.err { border-color: #e3a29a; background: #fdecea; color: #b0281b; }
+  #transBanner .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #transBanner.err .msg { white-space: normal; }
+  #transBanner a { color: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+  #transBanner .bx { border: 0; background: transparent; color: inherit; opacity: .6; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* export dialog + version line */
+  #exportDlg { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(400px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.25); color: var(--ink); }
+  #exportDlg::backdrop { background: rgba(30,28,25,.35); }
+  #exportDlg form { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  #exportDlg h2 { margin: 0; font-size: 16px; }
+  #exportDlg h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  #exportDlg fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  #exportDlg label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  #exportDlg label.off { color: var(--muted); }
+  #exportDlg input[type=text] { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; width: 120px; }
+  #exportDlg .err { color: #c0392b; font-size: 12px; min-height: 1em; margin: 0; }
+  #exportDlg .foot, #settingsDlg .foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  .ver { color: var(--muted); font-size: 11px; margin-right: auto; }
+  #caseMenu .ver { display: block; padding: 4px 10px 3px; }
 
   @media (max-width: 900px) { #index { display: none; } }
 </style>
@@ -236,23 +394,53 @@
       <button data-case="save">Save<kbd>Ctrl+S</kbd></button>
       <button data-case="saveAs">Save as…<kbd>Ctrl+Shift+S</kbd></button>
       <hr>
+      <div id="caseTrashItems" hidden></div>
+      <button data-case="closeDoc">Close this document</button>
+      <hr>
       <button data-case="exportPdf">Export document as PDF…</button>
+      <button data-case="translate">Translate whole document</button>
+      <button data-case="translateRegion">Translate a region (drag)</button>
+      <button data-case="removePageTrans">Remove all translations on this page</button>
+      <button data-case="toggleView" id="caseViewItem">Show translated<kbd>T</kbd></button>
+      <button data-case="reocr">Re-OCR this document</button>
+      <hr>
+      <button data-case="settings">Settings…</button>
+      <hr>
+      <span class="ver" data-ver></span>
     </div>
     <input id="caseFile" type="file" accept=".lawcase" hidden>
   </div>
   <input id="caseTitle" value="Untitled case" title="Case title — click to edit" spellcheck="false" />
   <span id="saveInd">Saved</span>
   <button class="btn" id="openPdfBtn">📄 Open PDF(s)</button><input id="file" type="file" accept="application/pdf" multiple hidden>
-  <button class="btn" id="loadSample">Sample: Petition</button>
-  <button class="btn" id="loadSample2">Sample: Counter</button>
-  <input id="search" placeholder="Find in document…" />
+  <div class="ddWrap" id="samplesWrap">
+    <button class="btn" id="samplesBtn">Samples ▾</button>
+    <div class="dd" id="samplesMenu">
+      <button id="loadSample">Sample: Petition</button>
+      <button id="loadSample2">Sample: Counter</button>
+      <button id="loadSampleKanScan">Sample: Kannada (scan)</button>
+      <button id="loadSampleKanDigital">Sample: Kannada (digital)</button>
+    </div>
+  </div>
   <div id="status"><span id="statusTxt">No document</span><div id="bar"><i></i></div></div>
+  <div id="findWrap">
+    <button class="btn" id="findBtn" title="Find in the open documents (Ctrl+F)">🔍</button>
+    <div id="findBox">
+      <input id="search" placeholder="Find in document…" spellcheck="false" />
+      <span id="findCount"></span>
+      <button class="fb" id="findPrev" title="Previous match (Shift+Enter)">↑</button>
+      <button class="fb" id="findNext" title="Next match (Enter)">↓</button>
+      <button class="fb" id="findClose" title="Close (Esc)">✕</button>
+    </div>
+  </div>
+  <button class="btn" id="settingsBtn" title="Settings — OCR engine, languages, Google Cloud key, translation">⚙</button>
 </div>
 
 <div id="main">
   <aside id="index">
     <div id="sideTabs"><button data-side="doc" class="active">Document</button><button data-side="master">Master index</button></div>
     <input id="masterFilter" placeholder="Filter headings &amp; clippings…" hidden />
+    <div id="idxBar"><button class="btn small" id="addHeading" title="Add an index entry — from the current selection, or a new heading at the top of the current page">＋ heading</button><span class="hint">or drop a selection here</span></div>
     <div id="tree"><div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div></div>
   </aside>
 
@@ -273,7 +461,17 @@
       <button class="tb" data-tool="erase" title="Eraser">⌫</button>
       <button class="tb" id="undoAnno" title="Undo last mark">↶</button>
       <hr>
-      <button class="tb" id="exportPdfBtn" title="Export this document as PDF with mark-up">⬇</button>
+      <button class="tb trans" id="transBtn" title="Translate (Google Cloud Translation) — whole document, a region, or remove">文A</button>
+      <button class="tb region" data-tool="region" title="Translate a region — drag a rectangle on the page">⬚文</button>
+      <button class="tb" id="exportPdfBtn" title="Export this document as PDF…">⬇</button>
+      <hr>
+      <button class="tb zm" id="zoomIn" title="Zoom in (Ctrl + wheel, Ctrl + =)">＋</button>
+      <button class="tb zm" id="zoomOut" title="Zoom out (Ctrl + wheel, Ctrl + -)">−</button>
+      <button class="tb zfit" id="zoomFit" title="Fit page to the pane (Ctrl + 0)">⤢</button>
+    </div>
+    <div id="readerHud">
+      <div id="viewSeg" role="group" aria-label="View" hidden><button data-view="0" title="Show the original page (T)">Original</button><button data-view="1" title="Show the translation patches (T)">Translated</button></div>
+      <div id="transBanner" role="status" hidden><span class="msg"></span><button class="bx" title="Dismiss">×</button></div>
     </div>
     <div id="toolPop"></div>
     <div id="strip">
@@ -303,20 +501,85 @@
         <div id="cards"></div>
       </div>
       <svg id="ink"><g id="inkG"></g></svg>
-      <div id="wsHint">Lasso or select text on the left, then drag it here. Pen: draw anywhere. Link: click two cards.</div>
     </div>
   </section>
 </div>
 
 <div id="ghost"></div>
+<div id="transMenu" role="menu"></div>
+<div id="toast"><span id="toastTxt"></span><button id="toastBtn" hidden>Settings…</button></div>
+<dialog id="settingsDlg">
+  <form method="dialog" id="settingsForm">
+    <h2>Settings</h2>
+    <section>
+      <h4>Google Cloud (Vision OCR and Translation)</h4>
+      <label>API key <input type="password" id="setKey" autocomplete="off" spellcheck="false" placeholder="AIza…"></label>
+      <div class="row"><button type="button" class="btn small" id="testKey">Test key</button><button type="button" class="btn small" id="showKey">Show</button><span id="testKeyRes"></span></div>
+      <span id="keySaveRes"></span>
+      <p class="hint" id="keyHint"></p>
+    </section>
+    <section>
+      <h4>OCR</h4>
+      <label>Engine <select id="setEngine"><option value="local">Local — Tesseract (offline)</option><option value="vision">Google Cloud Vision (cloud, needs key)</option></select></label>
+      <label>Languages <select id="setLangs"><option value="eng">English</option><option value="kan">Kannada</option><option value="kan+eng">Kannada + English</option></select></label>
+      <div id="reocrBanner" hidden>OCR settings changed — pages already read keep their old text until you re-OCR.</div>
+      <div class="row"><button type="button" class="btn small" id="reocrBtn">Re-OCR this document</button><span class="hint" id="reocrHint"></span></div>
+    </section>
+    <section>
+      <h4>Translation — Google Cloud Translation (cloud)</h4>
+      <label>Translate to <select id="setTarget">
+        <option value="en">English</option><option value="kn">Kannada</option><option value="hi">Hindi</option><option value="ta">Tamil</option>
+        <option value="te">Telugu</option><option value="ml">Malayalam</option><option value="mr">Marathi</option><option value="bn">Bengali</option>
+        <option value="gu">Gujarati</option><option value="ur">Urdu</option><option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option>
+      </select></label>
+      <label>Translate from <select id="setSource"><option value="">Auto-detect</option><option value="kn">Kannada</option><option value="en">English</option></select></label>
+      <label>Show translated documents as <select id="setTransView"><option value="translated">Translated</option><option value="original">Original</option></select></label>
+      <p class="hint">Page text is sent to Google only when translation or Vision OCR is used. The region tool (⬚文) always reads the selected area with Google Vision when a key is set.</p>
+    </section>
+    <section>
+      <h4>Tools</h4>
+      <label>Lasso shape <select id="setLasso"><option value="free">Free — draw a loop</option><option value="box">Box — drag a rectangle</option></select></label>
+    </section>
+    <div class="foot"><span class="ver" data-ver></span><button class="btn" value="close">Done</button></div>
+  </form>
+</dialog>
+<dialog id="exportDlg">
+  <form method="dialog" id="exportForm">
+    <h2>Export document as PDF</h2>
+    <fieldset>
+      <h4>Pages</h4>
+      <label><input type="radio" name="xPages" value="all" checked> All pages</label>
+      <label><input type="radio" name="xPages" value="current"> Current page <span class="hint" id="xCurHint"></span></label>
+      <label><input type="radio" name="xPages" value="range"> Pages <input type="text" id="xRange" placeholder="1-3,7" spellcheck="false"></label>
+    </fieldset>
+    <fieldset>
+      <h4>Layers</h4>
+      <label><input type="checkbox" id="xText" checked> Searchable text layer (OCR)</label>
+      <label id="xMarkupL"><input type="checkbox" id="xMarkup"> Mark-up: pen, highlights, sticky notes</label>
+      <label id="xTransL"><input type="checkbox" id="xTrans"> Translation overlays</label>
+    </fieldset>
+    <p class="err" id="xErr"></p>
+    <div class="foot"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn active" value="export" id="xGo">Export</button></div>
+  </form>
+</dialog>
 <div id="drop">
   <div class="big">Drop a scanned PDF here</div>
-  <div>OCR runs automatically in your browser. Nothing is uploaded.</div>
+  <div>OCR runs automatically in your browser. Nothing is uploaded unless you choose Google Vision or translation in Settings.</div>
   <div style="font-size:12px">or load the two fabricated samples (a writ petition and the State's counter) to try cross-document linking</div>
+  <div id="dropNote" hidden></div>
 </div>
+<dialog id="confirmDlg">
+  <form method="dialog">
+    <h2 id="confirmTitle">Delete from case</h2>
+    <p id="confirmTxt"></p>
+    <div class="foot"><button class="btn" value="cancel">Cancel</button><button class="btn danger" value="ok" id="confirmOk">Delete</button></div>
+  </form>
+</dialog>
 
 <script type="module">
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
+import { isUnreadableText, fixKannadaZero, layoutBlocks, fitFontSize, sampleBlockColors, fitTextToBox, LINE_HEIGHT, drawOverlay,
+  visionOcr, translateBlocks, translateBatch, GoogleError } from './lens.js';
 
 // ---- pdf.js worker (cross-origin safe via blob import) ----
 {
@@ -325,9 +588,11 @@ import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38
   pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(blob), { type: 'module' });
 }
 
+const APP_VERSION = '0.5.0';           // keep in sync with desktop/package.json
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const reader = $('#reader');
+$$('[data-ver]').forEach(el => el.textContent = `Case Canvas v${window.desktop?.version || APP_VERSION} · Stuthi Labs`);
 
 // =====================================================================
 //  STATE
@@ -335,10 +600,20 @@ const reader = $('#reader');
 // Several documents can be open at once; `doc` is the one shown in the reader. The workspace is shared by all of them.
 const docs = [];                        // [{ id, name, hue, bytes, pdf, pages, pagesEl, pageWidth, index }]
 let doc = null;                         // active document
+// Round 4: closing a document keeps it in the case. `docs` holds only the open documents (with pages, pdf.js, DOM);
+// a closed one is a plain record in `closedDocs` that keeps the bytes and everything the case stores for it:
+//   { id, name, hue, bytes, closed: true, json (its case.json entry), ocr, annotations, translations, manualIndex, pageCount, index, tree }
+// Deleting moves the record plus its cards and edges into `caseTrash` (undo until the case is next saved to a file):
+//   { doc: closed record, wasClosed, at, cards: [{ wsId, spec, blob }], edges: [{ wsId, edge }] }
+const closedDocs = [];
+const caseTrash = [];
+const reopening = new Map();            // doc id → promise of the document being rebuilt from its bytes
+let caseGen = 0;                        // bumped when the whole case is replaced (stale async work checks it)
+const allDocs = () => [...docs, ...closedDocs];
 let nextId = 1;                         // one counter for every id in the case (documents, workspaces, cards, edges)
 const uid = () => nextId++;
 const HUES = [18, 210, 140, 280, 45, 330, 180];
-const pickHue = () => HUES.find(h => !docs.some(d => d.hue === h)) ?? HUES[docs.length % HUES.length];
+const pickHue = () => { const used = [...docs, ...closedDocs, ...caseTrash.map(e => e.doc)]; return HUES.find(h => !used.some(d => d.hue === h)) ?? HUES[used.length % HUES.length]; };
 // A case has several workspaces; `ws` is the active one. Documents are case-level and shared by all of them.
 const workspaces = [];
 const makeWorkspace = (title, id = uid()) => ({ id, title, createdAt: new Date().toISOString(), x: 40, y: 40, z: 1, cards: [], edges: [], strokes: [], linkSrc: null, selected: null });
@@ -348,15 +623,28 @@ let booted = false, restoring = false;  // autosave is off until the startup res
 let tool = 'hand';
 let selection = null;                   // { doc, page, bbox:{x,y,w,h} (normalised), text }
 
+// Settings are case-independent (docs/SPEC-translation.md §2): localStorage `casecanvas.settings`; the Google key is separate.
+const SETTINGS_KEY = 'casecanvas.settings', WEB_KEY = 'casecanvas.googleApiKey';
+// transView: how a document is shown once it first gets a translation ('translated' | 'original'), §7.1
+// lassoShape: the lasso tool draws a freehand polygon ('free') or a rectangle ('box') — round 3 §4
+const DEFAULT_SETTINGS = { ocrEngine: 'local', ocrLangs: 'eng', target: 'en', source: '', transView: 'translated', lassoShape: 'free' };
+const settings = { ...DEFAULT_SETTINGS };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch {}
+let apiKey = null;                      // loaded at boot (desktop: safeStorage via the bridge; web: localStorage)
 const desktop = window.desktop?.isDesktop ? window.desktop : null;   // Electron bridge (§6 of docs/SPEC-case-file.md)
 // Subscribe at module start (the shell sends open-file right after did-finish-load). The callbacks only run after this
 // module has finished evaluating, so the functions they call (declared further down) are ready by then.
 desktop?.onMenu?.(a => caseAction(a));
 desktop?.onOpenFile?.(f => onDesktopOpenFile(f));
+// pdf.js shares one worker port: destroying a document tears that worker down asynchronously, and getDocument() during
+// the teardown throws "the worker is being destroyed". openPdf waits for pending teardowns.
+let pdfDestroying = Promise.resolve();
+const destroyPdf = pdf => { if (pdf) pdfDestroying = Promise.all([pdfDestroying, pdf.destroy().catch(() => {})]); };
 const toArrayBuffer = b => b instanceof ArrayBuffer ? b : b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 const statusTxt = $('#statusTxt'), bar = $('#bar i');
 const setStatus = (t, frac) => { statusTxt.textContent = t; if (frac != null) bar.style.width = `${Math.round(frac * 100)}%`; };
-const docById = id => docs.find(d => d.id === id);
+const docById = id => docs.find(d => d.id === id);                 // open documents only
+const anyDocById = id => docById(id) || closedDocs.find(d => d.id === id);   // open or closed
 const pageOf = el => docById(+el.dataset.doc)?.pages[+el.dataset.n - 1];   // page record from a .page element
 
 // =====================================================================
@@ -377,6 +665,11 @@ async function loadSample(name) {
 }
 $('#loadSample').addEventListener('click', () => loadSample('scanned_petition.pdf'));
 $('#loadSample2').addEventListener('click', () => loadSample('scanned_counter.pdf'));
+$('#loadSampleKanScan').addEventListener('click', () => loadSample('kannada-scanned-sample.pdf'));
+$('#loadSampleKanDigital').addEventListener('click', () => loadSample('kannada-sample.pdf'));
+$('#samplesBtn').addEventListener('click', e => { $('#samplesMenu').classList.toggle('show'); e.stopPropagation(); });
+$('#samplesMenu').addEventListener('click', () => $('#samplesMenu').classList.remove('show'));
+document.addEventListener('click', e => { if (!e.target.closest('#samplesWrap')) $('#samplesMenu').classList.remove('show'); });
 ['dragover', 'drop'].forEach(ev => document.addEventListener(ev, e => {
   e.preventDefault();
   if (ev !== 'drop') return;
@@ -387,15 +680,22 @@ $('#loadSample2').addEventListener('click', () => loadSample('scanned_counter.pd
 }));
 
 // Opens a PDF from its bytes. `saved` carries what a restore knows already (id, hue, OCR words, marks, scroll).
-async function openPdf({ name, bytes, id = uid(), hue = pickHue(), ocr = null, annotations = null, scrollTop = 0, scrollLeft = 0, activate = true }) {
+async function openPdf({ name, bytes, id = uid(), hue = pickHue(), ocr = null, annotations = null, scrollTop = 0, scrollLeft = 0, activate = true,
+  translations = null, viewTranslated = undefined, translateOn = false, ocrEngine = null, ocrLangs = null, zoom = 1, manualIndex = null }) {
   $('#drop').classList.add('hidden');
-  const d = { id, name, hue, bytes, pdf: null, pages: [], index: [], tree: { children: [] }, pageWidth: 820, scrollTop, scrollLeft };
-  d.pagesEl = document.createElement('div'); d.pagesEl.className = 'pages'; d.pagesEl.style.display = 'none';
+  // viewTranslated (§7.1) replaces the old translateOn toggle; cases saved by the previous version map one onto the other
+  const d = { id, name, hue, bytes, pdf: null, pages: [], index: [], tree: { children: [] }, pageWidth: 820, scrollTop, scrollLeft, zoom: clampZoom(zoom),
+    manualIndex: (Array.isArray(manualIndex) ? manualIndex : []).filter(m => m && Number.isFinite(+m.page)).map(m => ({ id: Number.isFinite(m.id) ? m.id : uid(), title: String(m.title || 'Heading'), page: +m.page, y: +m.y || 0, level: clampLevel(m.level) })),
+    viewTranslated: !!(viewTranslated ?? translateOn), ocrEngine: ocrEngine || null, ocrLangs: ocrLangs || null, trans: null, transGen: 0 };
+  if (translations?.pages) d.trans = { target: translations.target || settings.target, source: translations.source ?? settings.source,
+    pages: translations.pages.map(t => t ? { n: t.n, detectedLang: t.detectedLang || '', whole: t.whole ?? !(t.blocks || []).some(b => b.manual), blocks: (t.blocks || []).map(cleanBlock) } : null) };
+  d.pagesEl = document.createElement('div'); d.pagesEl.className = 'pages' + (d.viewTranslated ? ' transOn' : ''); d.pagesEl.style.display = 'none';
   reader.appendChild(d.pagesEl);
   docs.push(d);
   if (activate) activateDoc(d); else renderTabs();
   setStatus(`Opening ${name}…`, 0);
   try {
+    await pdfDestroying;                         // a closed document's teardown releases the shared worker port first
     d.pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;   // pdf.js detaches what it gets: keep the original
   } catch (err) {
     console.error(err); setStatus(`Could not open ${name}: ${err.message}`);
@@ -409,38 +709,47 @@ async function openPdf({ name, bytes, id = uid(), hue = pickHue(), ocr = null, a
     if (!docs.includes(d)) return null;                            // the case was replaced while this was loading
     const [, , w, h] = p.view;
     const el = document.createElement('div'); el.className = 'page'; el.dataset.n = n; el.dataset.doc = d.id;
-    el.innerHTML = `<div class="pageNo">Page ${n}</div><div class="ocrTag">queued</div><canvas></canvas><div class="ph">Page ${n}</div><div class="textLayer"></div><svg class="anno" viewBox="0 0 1000 ${(1000 * h / w).toFixed(1)}" preserveAspectRatio="none"></svg><svg class="ovl"></svg>`;
+    el.innerHTML = `<div class="pageNo">Page ${n}</div><div class="ocrTag">queued</div><canvas></canvas><div class="ph">Page ${n}</div><div class="textLayer"></div><div class="trans"></div><svg class="anno" viewBox="0 0 1000 ${(1000 * h / w).toFixed(1)}" preserveAspectRatio="none"></svg><svg class="ovl"></svg>`;
     d.pagesEl.appendChild(el);
-    const page = { doc: d, n, el, pdfPage: p, canvas: $('canvas', el), textLayer: $('.textLayer', el), anno: $('.anno', el), ovl: $('.ovl', el), tag: $('.ocrTag', el), w, h, cssW: 0, cssH: 0, words: null, rendered: false, lines: [], ocrState: 'queued', annos: [] };
+    const page = { doc: d, n, el, pdfPage: p, canvas: $('canvas', el), textLayer: $('.textLayer', el), transEl: $('.trans', el), anno: $('.anno', el), ovl: $('.ovl', el), tag: $('.ocrTag', el), w, h, cssW: 0, cssH: 0, words: null, rendered: false, lines: [], ocrState: 'queued', annos: [],
+      ocrBlocks: null, ocrGen: 0, ocrBlocked: null, transErr: null, transColors: null, ocrEngine: null, ocrLangs: null, transWanted: false };
     sizePage(page);
     d.pages.push(page);
     const o = ocr?.pages?.[n - 1];
     if (o && Array.isArray(o.words)) applyOcr(page, o);           // restored: no re-OCR
     for (const m of annotations?.pages?.find(x => x.n === n)?.items || []) addMark(page, m);
     observer.observe(el);
+    if (n % 25 === 0 && n < d.pdf.numPages) setStatus(`Opening ${name}… page ${n} of ${d.pdf.numPages}`, n / d.pdf.numPages);
   }
-  if (d.pages.some(p => p.ocrState === 'done')) buildIndex(d);
+  d.manualIndex = d.manualIndex.filter(m => m.page >= 1 && m.page <= d.pages.length);
+  buildIndex(d);                                 // detected headings (if any page is read) + manual entries
   if (doc === d) { reader.scrollTop = d.scrollTop || 0; reader.scrollLeft = d.scrollLeft || 0; }
-  renderTabs(); renderThumbs(); refreshMaster();
+  updateWindow();                                // the pages near the scroll position become live (text layer, patches, bitmap)
+  renderTabs(); renderThumbs(); refreshMaster(); updateTransUi();
   const left = d.pages.filter(p => p.ocrState !== 'done').length;
   setStatus(`${name}: ${d.pdf.numPages} pages${left ? ' · starting OCR' : ''}`, left ? 0 : 1);
   changed();
-  runOcrQueue();
+  runOcrQueue(); runTransQueue();
   return d;
 }
 function applyOcr(p, o) {                     // saved words → text layer + lines, exactly as if OCR had just finished
+  p.ocrBlocks = Array.isArray(o.blocks) ? o.blocks : null;
   p.words = o.words; p.source = o.source || 'ocr'; p.lines = groupLines(p.words); p.ocrState = 'done';
+  // what produced these words (older cases only recorded it per document; their default was local + eng)
+  if (p.source === 'ocr') { p.ocrEngine = o.engine || p.doc.ocrEngine || 'local'; p.ocrLangs = o.langs || p.doc.ocrLangs || 'eng'; }
   p.tag.textContent = p.source === 'text' ? 'text layer' : 'OCR ✓';
   paintTextLayer(p);
 }
 
 function activateDoc(d) {
-  if (doc === d) return;
+  if (doc === d || !d || d.closed || !docs.includes(d)) return;
   doc = d; hideSelection();
   docs.forEach(x => x.pagesEl.style.display = x === d ? '' : 'none');
-  for (const p of d.pages) if (p.unfit && p.words) paintTextLayer(p);   // layers painted while hidden could not be measured
   reader.scrollTop = d.scrollTop || 0; reader.scrollLeft = d.scrollLeft || 0;
-  renderTabs(); renderTree(); renderThumbs(); scrollSpy();
+  updateWindow();                                // the other documents' pages go dormant; this one's pages near the scroll position wake up
+  for (const p of d.pages) if (p.unfit && p.words) paintTextLayer(p);   // layers painted while hidden could not be measured
+  for (const p of d.pages) if (p.transUnfit) paintTrans(p);
+  renderTabs(); renderTree(); renderThumbs(); scrollSpy(); updateTransUi(); updateZoomUi();
   changed(true);
 }
 
@@ -448,27 +757,158 @@ function activateDoc(d) {
 const view = 'board';
 reader.classList.add('board');
 function sizePage(p) {                      // CSS size of a page; everything else is relative to it
-  p.cssH = Math.max(300, reader.clientHeight - 170); p.cssW = p.cssH * p.w / p.h;
+  p.cssH = Math.max(300, reader.clientHeight - 170) * (p.doc.zoom || 1); p.cssW = p.cssH * p.w / p.h;
   p.el.style.width = p.cssW + 'px'; p.el.style.height = p.cssH + 'px';
 }
 function relayout() {
   hideSelection();
-  for (const d of docs) for (const p of d.pages) { sizePage(p); if (p.words) paintTextLayer(p); if (p.rendered) unrender(p); }
+  for (const d of docs) for (const p of d.pages) { sizePage(p); if (p.words) paintTextLayer(p); else paintTrans(p); if (p.rendered) unrender(p); }
   // pages near the viewport are re-rendered by the observer; nudge it
-  requestAnimationFrame(() => { for (const p of doc?.pages || []) { const r = p.el.getBoundingClientRect(); if (r.right > -1200 && r.left < innerWidth + 1200 && r.bottom > -1200 && r.top < innerHeight + 1200) ensureRendered(p); } scrollSpy(); });
+  requestAnimationFrame(() => { updateWindow(); for (const p of doc?.pages || []) if (nearView(p)) ensureRendered(p); scrollSpy(); });
 }
 function setView() { reader.classList.add('board'); relayout(); }   // kept for the restore path; the board is the only view
 addEventListener('resize', () => { clearTimeout(relayout.t); relayout.t = setTimeout(relayout, 150); });
-// a normal wheel scrolls sideways
+// a normal wheel scrolls sideways; Ctrl/⌘ + wheel zooms around the pointer
 reader.addEventListener('wheel', e => {
-  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.ctrlKey || e.metaKey) {
+    if (!doc) return;
+    e.preventDefault();
+    // a mouse wheel notch is one ×1.15 step; a trackpad pinch (small deltas, ctrlKey set by the browser) zooms continuously
+    const k = e.deltaMode || Math.abs(e.deltaY) >= 40 ? (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP) : Math.exp(-e.deltaY * 0.01);
+    setZoom(doc, doc.zoom * k, { x: e.clientX, y: e.clientY });
+    return;
+  }
+  if (e.shiftKey) return;
+  // zoomed in: a page taller than the pane scrolls vertically while the pointer is over it (Shift + wheel still goes sideways)
+  if (doc?.zoom > 1 && reader.scrollHeight > reader.clientHeight + 1 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    const atEnd = e.deltaY < 0 ? reader.scrollTop <= 0 : reader.scrollTop + reader.clientHeight >= reader.scrollHeight - 1;
+    if (!atEnd) return;                                // native vertical scroll
+  }
   if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { reader.scrollLeft += e.deltaY; e.preventDefault(); }
 }, { passive: false });
+
+// ---- zoom (round 3 §1): per document `d.zoom` (0.5–3, ×1.15 steps). Pages are re-sized; every layer on a page is
+// page-relative (text spans are re-laid from cssW/cssH, SVGs and markers are in % or a viewBox), so they follow.
+const ZOOM_MIN = 0.5, ZOOM_MAX = 3, ZOOM_STEP = 1.15, MAX_CANVAS_PX = 16e6;
+function clampZoom(z) { z = +z; return Number.isFinite(z) && z > 0 ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 1000) / 1000)) : 1; }
+function pageAtPoint(d, x) {                  // the page under client x (pages sit side by side), else the nearest one
+  let best = null, bestD = Infinity;
+  for (const p of d.pages) { const r = p.el.getBoundingClientRect(); const dd = x < r.left ? r.left - x : x > r.right ? x - r.right : 0; if (dd < bestD) { bestD = dd; best = p; } }
+  return best;
+}
+const nearView = p => { const r = p.el.getBoundingClientRect(); return r.right > -1200 && r.left < innerWidth + 1200 && r.bottom > -1200 && r.top < innerHeight + 1200; };
+let zoomStatusTimer = null, zoomStatusPrev = '';
+function setZoom(d, z, at = null) {           // at: { x, y } client point that stays put (default: the centre of the pane)
+  if (!d) return null;
+  z = clampZoom(z);
+  if (Math.abs(z - (d.zoom || 1)) < 1e-3) { if (d === doc) zoomStatus(d); return d.zoom; }
+  let anchor = null;
+  if (d === doc && d.pages.length) {
+    const rr = reader.getBoundingClientRect();
+    const ax = at?.x ?? rr.left + reader.clientWidth / 2, ay = at?.y ?? rr.top + reader.clientHeight / 2;
+    const p = pageAtPoint(d, ax), r = p.el.getBoundingClientRect();
+    anchor = { p, ax, ay, fx: (ax - r.left) / r.width, fy: (ay - r.top) / r.height };
+  }
+  d.zoom = z;
+  hideSelection();
+  for (const p of d.pages) { sizePage(p); if (p.words) paintTextLayer(p); else paintTrans(p); if (p.rendered || p.rendering) p.renderStale = true; }
+  if (anchor) {                                // keep the point under the pointer fixed
+    const r = anchor.p.el.getBoundingClientRect();
+    reader.scrollLeft += r.left + anchor.fx * r.width - anchor.ax;
+    reader.scrollTop += r.top + anchor.fy * r.height - anchor.ay;
+  }
+  clearTimeout(setZoom.t); setZoom.t = setTimeout(() => rerenderStale(d), 180);   // sharp canvases once the gesture settles
+  if (d === doc) { zoomStatus(d); updateZoomUi(); requestAnimationFrame(() => { updateWindow(); scrollSpy(); }); }
+  changed(true);
+  return z;
+}
+function zoomStatus(d) {                      // "Zoom 130%" in the status line for a moment, then back to what was there
+  if (!zoomStatusTimer) zoomStatusPrev = statusTxt.textContent;
+  statusTxt.textContent = `Zoom ${Math.round(d.zoom * 100)}%`;
+  clearTimeout(zoomStatusTimer);
+  zoomStatusTimer = setTimeout(() => { zoomStatusTimer = null; if (/^Zoom \d+%$/.test(statusTxt.textContent)) statusTxt.textContent = zoomStatusPrev; }, 1600);
+}
+function updateZoomUi() {
+  const z = doc?.zoom || 1, pct = `${Math.round(z * 100)}%`;
+  $('#zoomIn').disabled = !doc || z >= ZOOM_MAX; $('#zoomOut').disabled = !doc || z <= ZOOM_MIN;
+  $('#zoomIn').title = `Zoom in — now ${pct} (Ctrl + wheel, Ctrl + =)`; $('#zoomOut').title = `Zoom out — now ${pct} (Ctrl + wheel, Ctrl + -)`;
+  $('#zoomFit').title = `Fit page to the pane — now ${pct} (Ctrl + 0)`;
+}
+function rerenderStale(d) {
+  for (const p of d.pages) {
+    if (!p.renderStale) continue;
+    if (d === doc && nearView(p)) rerender(p);
+    else { p.renderStale = false; if (p.rendered) unrender(p); }   // re-rendered by the observer when it comes near the view
+  }
+}
+async function rerender(p) {                  // render at the new size off-screen, then swap: the old bitmap stays up meanwhile
+  p.renderStale = false;
+  if (p.rendering) { try { await p.renderPromise; } catch {} }
+  if (!p.rendered) { ensureRendered(p); return; }
+  const vp = p.pdfPage.getViewport({ scale: renderScale(p) });
+  const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+  try { await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; } catch (err) { console.warn(err); return; }
+  if (p.renderStale || !p.rendered || !p.canvas.isConnected) { c.width = c.height = 0; return; }   // zoomed again / unrendered meanwhile
+  const old = p.canvas; old.replaceWith(c); p.canvas = c; old.width = old.height = 0;
+}
+$('#zoomIn').onclick = () => doc && setZoom(doc, doc.zoom * ZOOM_STEP);
+$('#zoomOut').onclick = () => doc && setZoom(doc, doc.zoom / ZOOM_STEP);
+$('#zoomFit').onclick = () => doc && setZoom(doc, 1);
+// keyboard zoom on the web; on desktop the native View menu owns these keys (Electron page zoom)
+if (!window.desktop) document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || !doc || document.querySelector('dialog[open]')) return;
+  const k = e.key;
+  if (k === '=' || k === '+') { e.preventDefault(); setZoom(doc, doc.zoom * ZOOM_STEP); }
+  else if (k === '-' || k === '_') { e.preventDefault(); setZoom(doc, doc.zoom / ZOOM_STEP); }
+  else if (k === '0') { e.preventDefault(); setZoom(doc, 1); }
+});
+// two-finger pinch on the reader (like the workspace's pinch); cancels a stroke / lasso / region the first finger began
+const rTouches = new Map(); let rPinch = null;
+reader.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch') return;
+  rTouches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (rTouches.size === 2 && doc) {
+    const [a, b] = [...rTouches.values()];
+    rPinch = { d0: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, z0: doc.zoom, raf: 0 };
+    cancelPointerTools();
+  }
+}, true);
+reader.addEventListener('pointermove', e => {
+  if (!rTouches.has(e.pointerId)) return;
+  rTouches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (!rPinch || rTouches.size !== 2 || !doc) return;
+  e.preventDefault();
+  if (rPinch.raf) return;
+  rPinch.raf = requestAnimationFrame(() => {
+    if (!rPinch) return; rPinch.raf = 0;
+    const [a, b] = [...rTouches.values()]; if (!b) return;
+    setZoom(doc, rPinch.z0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / rPinch.d0, { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 });
+  });
+}, true);
+const endRTouch = e => { rTouches.delete(e.pointerId); if (rTouches.size < 2 && rPinch) { cancelAnimationFrame(rPinch.raf); rPinch = null; } };
+reader.addEventListener('pointerup', endRTouch, true); reader.addEventListener('pointercancel', endRTouch, true);
+function cancelPointerTools() {
+  if (lasso) { lasso.path.remove(); lasso = null; }
+  if (drawing) { if (!drawing.erase) drawing.path.remove(); drawing = null; }
+  if (regionDrag) { regionDrag.rect.remove(); regionDrag = null; }
+}
 
 // ---- filmstrip of page previews along the bottom
 const strip = $('#strip'), thumbsEl = $('#thumbs');
 $('.handle', strip).onclick = () => strip.classList.toggle('pinned');
+// Thumbnails are rendered only when they scroll into the strip (each one decodes the page's scan), and at most
+// THUMB_CACHE of them are kept: a 1000-page bundle must not mean 1000 renders at open.
+const THUMB_CACHE = 150;
+const thumbObserver = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    const t = e.target, p = doc?.pages[+t.dataset.n - 1];
+    if (!p || $('canvas', t)) continue;
+    thumbOf(p).then(c => { if (c && t.isConnected && !$('canvas', t)) t.prepend(c); }).catch(() => {});
+  }
+}, { root: thumbsEl, rootMargin: '0px 400px 0px 400px' });
 function renderThumbs() {
+  thumbObserver.disconnect();
   thumbsEl.innerHTML = '';
   if (!doc) return;
   for (const p of doc.pages) {
@@ -477,16 +917,34 @@ function renderThumbs() {
     t.innerHTML = `<span>${p.n}</span>`;
     t.onclick = () => scrollToPos(doc, p.n, 0);
     thumbsEl.appendChild(t);
-    thumbOf(p).then(c => { if (c && t.isConnected) t.prepend(c); }).catch(() => {});
+    if (p.thumb) t.prepend(p.thumb); else thumbObserver.observe(t);
   }
   markCurrentThumb();
 }
-async function thumbOf(p) {                 // tiny render, cached per page
+async function thumbOf(p) {                 // tiny render, cached per page (bounded, see THUMB_CACHE)
   if (p.thumb) return p.thumb;
-  const vp = p.pdfPage.getViewport({ scale: 176 / p.h });
-  const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
-  await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-  p.thumb = c; return c;
+  if (p.thumbing) return p.thumbing;
+  p.thumbing = (async () => {
+    const vp = p.pdfPage.getViewport({ scale: 176 / p.h });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    if (!p.live) releasePage(p);
+    p.thumb = c; p.thumbing = null; trimThumbs(p.doc);
+    return c;
+  })();
+  return p.thumbing;
+}
+function trimThumbs(d) {                    // too many cached: forget the ones farthest from the page being read
+  const have = d.pages.filter(p => p.thumb);
+  if (have.length <= THUMB_CACHE) return;
+  const cur = d === doc ? currentPageNo() : 0;
+  have.sort((a, b) => Math.abs(b.n - cur) - Math.abs(a.n - cur));
+  for (const p of have.slice(0, have.length - THUMB_CACHE)) {
+    if (Math.abs(p.n - cur) <= 40) break;
+    const t = $(`.thumb[data-n="${p.n}"]`, thumbsEl);
+    p.thumb.remove(); p.thumb.width = p.thumb.height = 0; p.thumb = null;
+    if (t && d === doc) thumbObserver.observe(t);   // rendered again if it scrolls back into the strip
+  }
 }
 function markCurrentThumb() {
   const n = currentPageNo();
@@ -504,22 +962,228 @@ function currentPageNo() {                  // page under the middle of the view
   }
   return best;
 }
-function closeDoc(d) {
-  d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove();
-  docs.splice(docs.indexOf(d), 1);
-  d.pdf?.destroy();
+// =====================================================================
+//  CLOSE / REOPEN / DELETE (docs/SPEC-round4.md)
+// =====================================================================
+// the case.json entry of an open document (also what a closed record keeps as `json`)
+const openDocJson = d => ({ id: d.id, name: d.name, hue: d.hue, pageCount: d.pdf?.numPages ?? d.pages.length,
+  pages: d.pages.map(p => ({ n: p.n, w: p.w, h: p.h })), scrollTop: d.scrollTop || 0, scrollLeft: d.scrollLeft || 0,
+  viewTranslated: !!d.viewTranslated, translateOn: !!d.viewTranslated, ocrEngine: d.ocrEngine || 'local', ocrLangs: d.ocrLangs || 'eng', zoom: d.zoom || 1,
+  manualIndex: d.manualIndex.map(m => ({ id: m.id, title: m.title, page: m.page, y: m.y, level: m.level })), closed: false });
+const closedDocJson = r => ({ ...r.json, id: r.id, name: r.name, hue: r.hue, pageCount: r.pageCount, manualIndex: r.manualIndex.map(m => ({ ...m })), closed: true });
+const caseDocJson = d => d.closed ? closedDocJson(d) : openDocJson(d);
+// per-document payloads, open or closed (a closed record keeps exactly what it had when it was closed)
+const docOcr = d => d.closed ? d.ocr : ocrOf(d);
+const docAnnotations = d => d.closed ? d.annotations : annotationsOf(d);
+const docTranslations = d => d.closed ? d.translations : transOf(d);
+const markCount = a => (a?.pages || []).reduce((s, p) => s + (p.items?.length || 0), 0);
+// a closed document's headings, from its saved OCR words (the master index keeps showing its tree)
+function savedIndexPages(r) {
+  return (r.ocr?.pages || []).map((o, i) => o && Array.isArray(o.words) ? { n: o.n || i + 1, lines: groupLines(o.words), doc: r, ocrState: 'done' } : null).filter(Boolean);
+}
+function makeClosedRecord(sd, bytes, ocr, annotations, translations) {   // from a case.json entry (restore / import)
+  const json = { ...sd }; delete json.closed;
+  const r = { id: sd.id, name: sd.name || 'document.pdf', hue: sd.hue ?? pickHue(), bytes, closed: true, json,
+    ocr: ocr || { pages: [] }, annotations: annotations || { pages: [] }, translations: translations?.pages ? translations : null,
+    manualIndex: (sd.manualIndex || []).filter(m => m && Number.isFinite(+m.page)).map(m => ({ id: Number.isFinite(m.id) ? m.id : uid(), title: String(m.title || 'Heading'), page: +m.page, y: +m.y || 0, level: clampLevel(m.level) })),
+    pageCount: sd.pageCount ?? sd.pages?.length ?? 0, index: [], tree: { children: [] } };
+  computeIndex(r, savedIndexPages(r));
+  return r;
+}
+// Close = hide: the tab goes, the pages' DOM and the pdf.js document are freed, everything else stays in the case.
+function closeDocument(d, { quiet = false } = {}) {
+  if (!d || d.closed || !docs.includes(d)) return null;
+  if (selection?.doc === d) hideSelection();
+  if (drawing?.p?.doc === d) drawing = null;
+  if (lasso?.p.doc === d) { lasso.path.remove(); lasso = null; }
+  if (regionDrag?.p.doc === d) { regionDrag.rect.remove(); regionDrag = null; }
+  $$('.sticky .sb', d.pagesEl).forEach(el => el.blur());           // a sticky being typed in commits its text first
+  // serialise exactly what a .lawcase export writes for this document, before its DOM goes
+  const json = openDocJson(d); delete json.closed;
+  const r = { id: d.id, name: d.name, hue: d.hue, bytes: d.bytes, closed: true, json, ocr: ocrOf(d), annotations: annotationsOf(d), translations: transOf(d),
+    manualIndex: d.manualIndex.map(m => ({ ...m })), pageCount: json.pageCount, index: d.index, tree: d.tree };
+  const i = docs.indexOf(d);
+  for (const p of d.pages) { observer.unobserve(p.el); p.canvas.width = p.canvas.height = 0; if (p.thumb) p.thumb.width = p.thumb.height = 0; }
+  d.pagesEl.remove(); docs.splice(i, 1);
+  destroyPdf(d.pdf); d.pdf = null; d.wholeRun = null;
+  for (let k = annoStack.length - 1; k >= 0; k--) if (annoStack[k].p.doc === d) annoStack.splice(k, 1);
   workspaces.forEach(w => w.cards.filter(c => c.source?.docId === d.id).forEach(c => { c.marker?.remove(); c.marker = null; }));
-  if (doc === d) { doc = null; if (docs[0]) activateDoc(docs[0]); else { renderTabs(); renderTree(); renderThumbs(); $('#drop').classList.remove('hidden'); } }
-  else { renderTabs(); refreshMaster(); }
+  closedDocs.push(r);
+  if (doc === d) {
+    doc = null;
+    const next = docs[i] || docs[i - 1];
+    if (next) activateDoc(next);
+    else { renderTabs(); renderTree(); renderThumbs(); updateTransUi(); updateZoomUi(); showDrop(); }
+  } else renderTabs();
+  refreshMaster();
+  if (!quiet) setStatus(`Closed ${r.name} — it stays in the case (Master index → Reopen)`);
   changed();
+  return r;
+}
+// Reopen: rebuild the pages from the bytes and re-apply OCR, mark-up, translations, index, zoom and scroll —
+// the same openPdf path a case restore takes for one document.
+function reopenDocument(r, { activate = true } = {}) {
+  if (!r) return Promise.resolve(null);
+  if (reopening.has(r.id)) return reopening.get(r.id);
+  if (!r.closed) return Promise.resolve(docs.includes(r) ? r : null);
+  const i = closedDocs.indexOf(r); if (i < 0) return Promise.resolve(null);
+  closedDocs.splice(i, 1);
+  const j = r.json, gen = caseGen;
+  const run = openPdf({ name: r.name, bytes: r.bytes, id: r.id, hue: r.hue, ocr: r.ocr, annotations: r.annotations, translations: r.translations,
+    scrollTop: j.scrollTop || 0, scrollLeft: j.scrollLeft || 0, activate: false, viewTranslated: j.viewTranslated ?? !!j.translateOn,
+    ocrEngine: j.ocrEngine, ocrLangs: j.ocrLangs, zoom: j.zoom ?? 1, manualIndex: r.manualIndex })
+    .then(d => {
+      if (gen !== caseGen) return null;                    // the case was replaced meanwhile
+      if (!d) {                                            // could not be parsed (or was closed / deleted while loading): stays closed
+        if (!anyDocById(r.id) && !caseTrash.some(e => e.doc.id === r.id)) closedDocs.push(r);
+        renderTabs(); refreshMaster(); return null;
+      }
+      for (const c of ws.cards) if (c.source?.docId === d.id && !c.marker) addMarker(c);
+      refreshClipTrans(d);
+      if (activate || !doc) activateDoc(d);
+      renderTabs(); refreshMaster();
+      setStatus(`Reopened ${d.name}`);
+      return d;
+    })
+    .finally(() => reopening.delete(r.id));
+  reopening.set(r.id, run);
+  renderTabs(); refreshMaster();
+  return run;
+}
+// an open document, reopening a closed one first (badge clicks, master index entries of closed documents)
+async function ensureOpen(id) {
+  if (reopening.has(id)) return reopening.get(id);
+  const d = docById(id); if (d) return d;
+  const r = closedDocs.find(x => x.id === id);
+  return r ? reopenDocument(r) : null;
+}
+const cardsOfDoc = id => workspaces.flatMap(w => w.cards.filter(c => c.source?.docId === id).map(c => ({ w, c })));
+// Delete from case: the document, its cards and the edges touching them go to the trash (undo until the next file save)
+function deleteDocument(d) {
+  if (!d) return null;
+  const wasClosed = !!d.closed;
+  const r = wasClosed ? d : closeDocument(d, { quiet: true });
+  if (!r) return null;
+  const k = closedDocs.indexOf(r); if (k < 0) return null;
+  closedDocs.splice(k, 1);
+  const hits = cardsOfDoc(r.id), ids = new Set(hits.map(h => h.c.id));
+  const entry = { doc: r, wasClosed, at: new Date().toISOString(), cards: [], edges: [] };
+  for (const w of workspaces) {
+    const gone = w.edges.filter(e => ids.has(e.from) || ids.has(e.to));
+    if (!gone.length) continue;
+    gone.forEach(e => entry.edges.push({ wsId: w.id, edge: { id: e.id, from: e.from, to: e.to, label: e.label || '' } }));
+    w.edges = w.edges.filter(e => !gone.includes(e));
+    if (gone.includes(selectedEdge)) selectedEdge = null;
+  }
+  for (const { w, c } of hits) {
+    entry.cards.push({ wsId: w.id, spec: cardJson(c), blob: c.blob });
+    w.cards.splice(w.cards.indexOf(c), 1);
+    if (w.selected === c) w.selected = null;
+    if (w.linkSrc === c) w.linkSrc = null;
+    c.el.remove(); c.marker?.remove(); c.marker = null; if (c.imgUrl) URL.revokeObjectURL(c.imgUrl);
+  }
+  masterCollapsed.delete(r.id); masterOpenClosed.delete(r.id);
+  caseTrash.push(entry);
+  drawEdges(); renderWsTabs(); renderTabs(); refreshMaster(); renderTrashMenu();
+  if (!doc) showDrop();
+  setStatus(`Deleted ${r.name} from the case${hits.length ? ` with ${hits.length} clipping${hits.length === 1 ? '' : 's'}` : ''}`);
+  toast(`Deleted “${r.name}”`, { label: 'Undo', fn: () => undoDelete(entry), ms: 15000, undo: entry });
+  changed();
+  return entry;
+}
+// Undo: the document comes back (open or closed, as it was) with its cards and edges at their old places
+function undoDelete(entry = caseTrash[caseTrash.length - 1]) {
+  if (typeof entry === 'number') entry = caseTrash.find(e => e.doc.id === entry);
+  const i = caseTrash.indexOf(entry); if (i < 0) return Promise.resolve(null);
+  caseTrash.splice(i, 1);
+  if (toastUndo === entry) hideToast();
+  const r = entry.doc; r.closed = true;
+  closedDocs.push(r);
+  for (const { wsId, spec, blob } of entry.cards) {
+    const w = workspaces.find(x => x.id === wsId) || ws;
+    addCard({ ...spec, blob: blob || null, source: spec.source ? { ...spec.source, docName: r.name, hue: r.hue } : null }, w);
+  }
+  for (const { wsId, edge } of entry.edges) {
+    const w = workspaces.find(x => x.id === wsId) || ws;
+    if (w.cards.some(c => c.id === edge.from) && w.cards.some(c => c.id === edge.to) && !w.edges.some(e => e.id === edge.id)) w.edges.push({ ...edge });
+  }
+  drawEdges(); renderWsTabs(); renderTrashMenu();
+  if (!entry.wasClosed) return reopenDocument(r).then(d => { changed(); return d || r; });
+  refreshMaster(); setStatus(`Restored ${r.name} (closed)`); changed();
+  return Promise.resolve(r);
+}
+function emptyTrash() {
+  if (!caseTrash.length) return;
+  if (toastUndo && caseTrash.includes(toastUndo)) hideToast();
+  caseTrash.length = 0; renderTrashMenu();
+}
+function renameDocument(d, name) {
+  name = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!d || !name || name === d.name) return false;
+  d.name = name;
+  for (const w of workspaces) for (const c of w.cards) if (c.source?.docId === d.id) { c.source.docName = name; paintCardBadge(c); }
+  renderTabs(); refreshMaster(); changed();
+  return true;
+}
+function startRenameDocument(d) {               // inline editor on the document's master index header
+  if (sideTab !== 'master') $('#sideTabs [data-side="master"]').click();
+  const nm = $(`#tree .mGroup[data-doc="${d.id}"] .mHead .nm`); if (!nm) return;
+  const inp = document.createElement('input'); inp.className = 'miEdit'; inp.value = d.name; nm.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = save => { if (done) return; done = true; if (!(save && renameDocument(d, inp.value))) renderTree(); };
+  inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); };
+  inp.onblur = () => finish(true); inp.onclick = ev => ev.stopPropagation(); inp.onpointerdown = ev => ev.stopPropagation();
+}
+function openDocMenu(d, x, y) {                 // right-click on a document header (master index) or a tab
+  transMenu.innerHTML = ''; transMenu.dataset.kind = 'doc';
+  const item = (label, fn, cls = '') => { const bt = document.createElement('button'); bt.setAttribute('role', 'menuitem'); bt.textContent = label; if (cls) bt.className = cls; bt.onclick = () => { closeTransMenu(); fn(); }; transMenu.appendChild(bt); };
+  if (d.closed) item('Reopen', () => reopenDocument(d)); else item('Close', () => closeDocument(d));
+  item('Rename…', () => startRenameDocument(d));
+  transMenu.appendChild(document.createElement('hr'));
+  item('Delete from case…', () => confirmDeleteDocument(d), 'danger');
+  showMenuAt(x, y);
+}
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+function confirmDeleteDocument(d) {
+  const id = d.id, hits = cardsOfDoc(id), N = hits.length, M = new Set(hits.map(h => h.w)).size;
+  $('#confirmTitle').textContent = 'Delete from case';
+  $('#confirmTxt').innerHTML = `Delete <b>${escapeHtml(d.name)}</b> from this case? Its OCR, mark-up${N ? `, translations and ${plural(N, 'clipping')} in ${plural(M, 'workspace')}` : ' and translations'} will be removed. You can undo this until the case is next saved.`;
+  confirmDlg.returnValue = '';
+  confirmDlg.onclose = () => { confirmDlg.onclose = null; if (confirmDlg.returnValue === 'ok') deleteDocument(anyDocById(id)); };
+  confirmDlg.showModal();
+  $('#confirmOk').focus();
+}
+// "Undo delete (name)" entries in the Case menu, newest first
+function renderTrashMenu() {
+  const box = $('#caseTrashItems'); if (!box) return;
+  box.innerHTML = '';
+  if (!caseTrash.length) { box.hidden = true; return; }
+  box.hidden = false;
+  for (const e of [...caseTrash].reverse()) {
+    const b = document.createElement('button'); b.dataset.undo = e.doc.id;
+    b.textContent = `Undo delete (${e.doc.name})`; b.title = `Restore ${e.doc.name}${e.cards.length ? ` and ${plural(e.cards.length, 'clipping')}` : ''} — possible until the case is saved`;
+    box.appendChild(b);
+  }
+  box.appendChild(document.createElement('hr'));
+}
+// the drop prompt covers only the reader once the case has documents (closed ones stay reachable in the sidebar) or cards
+function showDrop() {
+  const el = $('#drop'), inReader = hasContent();
+  const host = inReader ? $('#readerWrap') : document.body;
+  if (el.parentElement !== host) host.appendChild(el);
+  el.classList.toggle('inReader', inReader);
+  $('#dropNote').hidden = !closedDocs.length;
+  $('#dropNote').textContent = closedDocs.length ? `${plural(closedDocs.length, 'closed document')} — reopen from the Master index` : '';
+  el.classList.remove('hidden');
 }
 function renderTabs() {
   const bar = $('#docTabs'); bar.innerHTML = '';
   for (const d of docs) {
     const t = document.createElement('div'); t.className = 'tab' + (d === doc ? ' active' : ''); t.style.setProperty('--dc', `hsl(${d.hue} 60% 45%)`);
     const done = d.pages.filter(p => p.ocrState === 'done').length;
-    t.innerHTML = `<i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span><span class="st">${d.pages.length ? (done < d.pages.length ? `${done}/${d.pages.length}` : `${d.pages.length}p`) : '…'}</span><button class="cl" title="Close">×</button>`;
-    t.onclick = e => { if (e.target.closest('.cl')) closeDoc(d); else activateDoc(d); };
+    t.innerHTML = `<i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span><span class="st">${d.pages.length ? (done < d.pages.length ? `${done}/${d.pages.length}` : `${d.pages.length}p`) : '…'}</span><button class="cl" title="Close (stays in the case)">×</button>`;
+    t.onclick = e => { if (e.target.closest('.cl')) closeDocument(d); else activateDoc(d); };
+    t.oncontextmenu = e => { e.preventDefault(); openDocMenu(d, e.clientX, e.clientY); };
     bar.appendChild(t);
   }
 }
@@ -540,58 +1204,170 @@ async function ensureRendered(p) {
   if (p.rendered || p.rendering) return p.renderPromise;
   p.rendering = true;
   p.renderPromise = (async () => {
-    const scale = (p.cssW / p.w) * Math.min(2, devicePixelRatio || 1);
-    const vp = p.pdfPage.getViewport({ scale });
+    const vp = p.pdfPage.getViewport({ scale: renderScale(p) });
     p.canvas.width = vp.width; p.canvas.height = vp.height;
     await p.pdfPage.render({ canvasContext: p.canvas.getContext('2d'), viewport: vp }).promise;
     $('.ph', p.el)?.remove();
     p.rendered = true; p.rendering = false;
+    if (!p.transColors && p.doc.viewTranslated && transOfPage(p)?.blocks.length) paintTrans(p);   // patches can now sample the page colours
   })();
   return p.renderPromise;
 }
 function unrender(p) { p.canvas.width = p.canvas.height = 0; p.rendered = false; }
 
+// ---- page window. The bitmap above is only the start: pdf.js keeps every page's decoded scan (tens of MB each) until
+// the page is cleaned up, and a text layer is a span per word. So only the pages near the one being read — PAGE_WINDOW
+// either side, plus whatever is within the observer's margin — are "live": bitmap, text layer, translation patches,
+// decoded images. Every other page is an empty box of the right size that keeps the board's geometry; its OCR words,
+// marks and translations stay in memory as data and are painted again when the window reaches it.
+const PAGE_WINDOW = 5;
+function setLive(p, on) {
+  if (!!p.live === on) return;
+  p.live = on;
+  if (on) { if (p.words) paintTextLayer(p); paintTrans(p); return; }
+  if (!p.transEl.querySelector('.editing')) p.transEl.innerHTML = '';
+  p.textLayer.innerHTML = '';
+  if (p.rendered) unrender(p);
+  releasePage(p);
+}
+// drop pdf.js's decoded images and operator list for a page (a no-op while a render of it is in flight)
+function releasePage(p) { try { p.pdfPage?.cleanup(); } catch {} }
+let windowTimer = 0;
+function updateWindow() {
+  clearTimeout(windowTimer); windowTimer = 0;
+  for (const d of docs) {
+    if (d !== doc) { for (const p of d.pages) setLive(p, false); continue; }
+    const cur = currentPageNo();
+    for (const p of d.pages) setLive(p, Math.abs(p.n - cur) <= PAGE_WINDOW || nearView(p));
+  }
+}
+// a timer rather than requestAnimationFrame: it throttles the per-page geometry pass while scrolling fast, and it still
+// runs when the window is occluded (where animation frames stop)
+const scheduleWindow = () => { if (!windowTimer) windowTimer = setTimeout(updateWindow, 60); };
+reader.addEventListener('scroll', scheduleWindow);
+// device pixels per PDF point for the on-screen bitmap; capped so a page zoomed to 300% stays a sane canvas
+function renderScale(p) { const s = (p.cssW / p.w) * Math.min(2, devicePixelRatio || 1); return Math.min(s, Math.sqrt(MAX_CANVAS_PX / (p.w * p.h))); }
+
 // =====================================================================
 //  OCR (auto, prioritised by what the user is looking at)
 // =====================================================================
-let tess = null;
-async function getWorker() {
-  if (tess) return tess;
-  setStatus('Loading OCR engine…');
-  tess = await Tesseract.createWorker('eng', 1, { logger: m => { if (m.status === 'recognizing text' && currentOcr) currentOcr.tag.textContent = `OCR ${Math.round(m.progress * 100)}%`; } });
-  return tess;
+// Local engine: one Tesseract worker per language set ('eng' | 'kan' | 'kan+eng'), re-created when the setting changes.
+let tess = null, tessLangs = null;
+async function getWorker(langs) {
+  if (tess && tessLangs === langs) return tess;
+  if (tess) { const old = tess; tess = null; tessLangs = null; old.terminate().catch(() => {}); }
+  setStatus(`Loading OCR engine (${langs}${langs.includes('kan') ? ' — the Kannada model is a large first download' : ''})…`);
+  const w = await Tesseract.createWorker(langs, 1, { logger: m => { if (m.status === 'recognizing text' && currentOcr) currentOcr.tag.textContent = `OCR ${Math.round(m.progress * 100)}%`; } });
+  tess = w; tessLangs = langs;
+  return w;
 }
+const visionHints = langs => ({ eng: ['en'], kan: ['kn'], 'kan+eng': ['kn', 'en'] })[langs] || [];
+const shortErr = m => { m = String(m || 'error'); return m.length > 48 ? m.slice(0, 46) + '…' : m; };
 let currentOcr = null, ocrRunning = false;
 async function runOcrQueue() {
   if (ocrRunning) return; ocrRunning = true;
   while (true) {
     const all = docs.flatMap(d => d.pages);
-    const pending = all.filter(p => p.ocrState === 'queued');
+    const pending = all.filter(p => p.ocrState === 'queued' && !p.ocrBlocked);
     if (!pending.length) break;
     // Prioritise: pages near the viewport, then the active document, then reading order
     pending.sort((a, b) => (b.priority || 0) - (a.priority || 0) || (b.doc === doc) - (a.doc === doc) || a.doc.id - b.doc.id || a.n - b.n);
-    const p = pending[0];
+    const p = pending[0], gen = p.ocrGen;
     currentOcr = p; p.ocrState = 'running'; p.tag.textContent = 'reading…'; p.tag.classList.add('busy');
+    let stale = false;
     try {
-      await extractPage(p);
-      p.ocrState = 'done'; p.tag.textContent = p.source === 'text' ? 'text layer' : `OCR ✓`; p.tag.classList.remove('busy');
-    } catch (err) { if (docs.includes(p.doc)) { console.error(err); p.ocrState = 'error'; p.tag.textContent = 'OCR failed'; } }
-    if (!docs.includes(p.doc)) continue;                // document closed / case replaced while this page was read
+      stale = (await extractPage(p, gen)) === 'stale';
+      if (!stale) { p.ocrState = 'done'; p.tag.textContent = p.source === 'text' ? 'text layer' : `OCR ✓`; p.tag.classList.remove('busy'); }
+    } catch (err) {
+      if (p.ocrGen !== gen) stale = true;
+      else if (docs.includes(p.doc)) {
+        p.tag.classList.remove('busy');
+        if (err instanceof GoogleError) {             // no key / quota / network: stays queued, retried when settings or the key change
+          p.ocrState = 'queued'; p.ocrBlocked = err.message; p.tag.textContent = 'OCR: ' + shortErr(err.message); p.tag.title = err.message;
+          setStatus(`Google Vision OCR paused: ${err.message}`);
+        } else { console.error(err); p.ocrState = 'error'; p.tag.textContent = 'OCR failed'; }
+      }
+    }
+    if (!docs.includes(p.doc) || stale) continue;       // document closed / case replaced / re-OCR requested while this page was read
+    if (!p.live) releasePage(p);                        // the OCR render decoded the page's scan: don't keep it for a page nobody is looking at
+    if (p.ocrBlocked) { renderTabs(); continue; }
     const done = all.filter(p => p.ocrState === 'done').length;
     setStatus(`OCR ${done}/${all.length} pages${docs.length > 1 ? ` across ${docs.length} documents` : ''}`, done / all.length);
     buildIndex(p.doc); renderTabs();
-    changed();                                          // OCR words are case data: autosave them
+    changed(false, 5000);                               // OCR words are case data: autosave them — unhurriedly, a big document OCRs for a long time
+    runTransQueue();                                    // a newly read page can be translated
   }
   ocrRunning = false; currentOcr = null;
   const all = docs.flatMap(d => d.pages);
-  setStatus(`${docs.length} document${docs.length > 1 ? 's' : ''} · ${all.length} pages · ${docs.reduce((s, d) => s + d.index.length, 0)} headings`, 1);
+  const blocked = all.filter(p => p.ocrBlocked);
+  if (blocked.length) setStatus(`OCR paused on ${blocked.length} page${blocked.length > 1 ? 's' : ''}: ${blocked[0].ocrBlocked}`);
+  else setStatus(`${docs.length} document${docs.length > 1 ? 's' : ''} · ${all.length} pages · ${docs.reduce((s, d) => s + d.index.length, 0)} headings`, 1);
+}
+function retryBlockedOcr() {                    // settings or key changed: pages paused on a Google error get another go
+  for (const d of docs) for (const p of d.pages) if (p.ocrBlocked) { p.ocrBlocked = null; p.tag.textContent = 'queued'; p.tag.title = ''; }
+  runOcrQueue();
+}
+// Re-OCR (Settings / Case menu): clears the document's OCR words (and the translations made from them) and re-queues every page.
+// Region translations (manual: true) carry their own OCR and are kept.
+function reOcrDocument(d) {
+  if (!d) return;
+  d.transGen++;
+  for (const p of d.pages) { resetPageOcr(p); dropWholeTrans(p); paintTrans(p); }
+  d.ocrEngine = null; d.ocrLangs = null;
+  buildIndex(d); renderTabs(); refreshMaster(); refreshClipTrans(d);
+  setStatus(`Re-reading ${d.name} with ${settings.ocrEngine === 'vision' ? 'Google Vision' : 'Tesseract'} (${settings.ocrLangs})…`, 0);
+  changed(); runOcrQueue();
+}
+function resetPageOcr(p) {                     // forget a page's OCR and queue it again
+  p.ocrGen++; p.words = null; p.lines = []; p.ocrBlocks = null; p.source = null; p.ocrBlocked = null; p.transErr = null; p.transColors = null;
+  p.ocrEngine = null; p.ocrLangs = null;
+  p.textLayer.innerHTML = ''; p.ocrState = 'queued'; p.tag.textContent = 'queued'; p.tag.title = ''; p.tag.classList.remove('busy');
+}
+function dropWholeTrans(p) {                   // remove the page's whole-page (machine) blocks; region blocks stay
+  const t = transOfPage(p); if (!t) return;
+  t.blocks = t.blocks.filter(b => b.manual); t.whole = false; p.transColors = null;
+  if (!t.blocks.length) p.doc.trans.pages[p.n - 1] = null;
+}
+// OCR is stale for translation when it was produced with another engine / language set than the current settings (§7.1)
+const ocrStale = p => p.ocrState === 'done' && p.source === 'ocr' && (p.ocrEngine !== settings.ocrEngine || p.ocrLangs !== settings.ocrLangs);
+const renderPage = async (p, scale) => {       // a fresh white-backed render of a page at `scale`
+  const vp = p.pdfPage.getViewport({ scale });
+  const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  await p.pdfPage.render({ canvasContext: ctx, viewport: vp }).promise;
+  return c;
+};
+const visionScale = p => Math.min(2, 2600 / Math.max(p.w, p.h));
+// Tesseract result → words + paragraph blocks, as fractions of the recognised image (W×H px)
+function tessParse(data, W, H, langs) {
+  const fix = langs.includes('kan') ? fixKannadaZero : s => s;   // anusvara read as Kannada zero
+  const ok = wd => wd.text.trim() && wd.confidence >= 30;
+  const paras = (data.blocks || []).flatMap(b => b.paragraphs || []);
+  const words = [];
+  for (const wd of data.words || paras.flatMap(pg => pg.lines.flatMap(l => l.words))) {
+    if (!ok(wd)) continue;
+    const { x0, y0, x1, y1 } = wd.bbox;
+    words.push({ text: fix(wd.text), x: x0 / W, y: y0 / H, w: (x1 - x0) / W, h: (y1 - y0) / H, conf: wd.confidence });
+  }
+  const blocks = [];                           // Tesseract's paragraph boxes become the translation blocks
+  for (const pg of paras) {
+    const lines = (pg.lines || []).map(l => (l.words || []).filter(ok).map(w => fix(w.text)).join(' ')).filter(Boolean);
+    if (!lines.length) continue;
+    const { x0, y0, x1, y1 } = pg.bbox;
+    const lh = (pg.lines || []).map(l => l.bbox.y1 - l.bbox.y0);
+    blocks.push({ text: lines.join(' ').replace(/\s+/g, ' ').trim(), lineCount: lines.length, fontSize: lh.reduce((s, v) => s + v, 0) / (lh.length || 1) / H,
+      box: { x: x0 / W, y: y0 / H, w: (x1 - x0) / W, h: (y1 - y0) / H } });
+  }
+  return { words, blocks };
 }
 
-async function extractPage(p) {
-  // 1) born-digital text layer?
+async function extractPage(p, gen = p.ocrGen) {
+  // 1) born-digital text layer? (a layer full of unmapped glyphs — many Indic PDFs — counts as scanned)
   const tc = await p.pdfPage.getTextContent();
-  const digital = tc.items.filter(i => i.str.trim()).length > 8;
+  const items = tc.items.filter(i => i.str.trim());
+  const digital = items.length > 8 && !isUnreadableText(items.map(i => i.str.trim()).join(''));
   const words = [];
+  let blocks = null;
   if (digital) {
     p.source = 'text';
     for (const it of tc.items) {
@@ -606,24 +1382,33 @@ async function extractPage(p) {
         cursor += part.length;
       }
     }
+  } else if (settings.ocrEngine === 'vision') {
+    // 2a) scanned → Google Cloud Vision DOCUMENT_TEXT_DETECTION on a scale-2 JPEG (longest side ≤ 2600 px)
+    if (!apiKey) await loadApiKey();
+    if (!apiKey) throw new GoogleError('Add a Google Cloud API key in Settings to use Google Vision OCR');
+    const langs = settings.ocrLangs;
+    const c = await renderPage(p, visionScale(p));
+    const W = c.width, H = c.height, base64 = c.toDataURL('image/jpeg', 0.92).split(',')[1];
+    c.width = c.height = 0;
+    const r = await visionOcr(base64, visionHints(langs), apiKey, W, H);
+    p.source = 'ocr'; p.doc.ocrEngine = p.ocrEngine = 'vision'; p.doc.ocrLangs = p.ocrLangs = langs;
+    words.push(...r.words);
+    blocks = r.paragraphs;
   } else {
-    // 2) scanned → OCR a 2x render
-    p.source = 'ocr';
-    const worker = await getWorker();
-    const scale = 2;                                   // ~150 dpi for a 72pt page
-    const vp = p.pdfPage.getViewport({ scale });
-    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
-    await p.pdfPage.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    // 2b) scanned → local Tesseract on a 2x render (~150 dpi for a 72pt page)
+    const langs = settings.ocrLangs;
+    const worker = await getWorker(langs);
+    const c = await renderPage(p, 2);
     const { data } = await worker.recognize(c, {}, { text: true, blocks: true });
-    const ocrWords = data.words || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(pg => pg.lines.flatMap(l => l.words)));
-    for (const wd of ocrWords) {
-      if (!wd.text.trim() || wd.confidence < 30) continue;
-      const { x0, y0, x1, y1 } = wd.bbox;
-      words.push({ text: wd.text, x: x0 / vp.width, y: y0 / vp.height, w: (x1 - x0) / vp.width, h: (y1 - y0) / vp.height, conf: wd.confidence });
-    }
+    p.source = 'ocr'; p.doc.ocrEngine = p.ocrEngine = 'local'; p.doc.ocrLangs = p.ocrLangs = langs;
+    const r = tessParse(data, c.width, c.height, langs);
+    c.width = c.height = 0;
+    words.push(...r.words);
+    blocks = r.blocks.length ? r.blocks : null;
   }
-  if (!docs.includes(p.doc)) return;
+  if (!docs.includes(p.doc) || p.ocrGen !== gen) return 'stale';
   p.words = words;
+  p.ocrBlocks = blocks;
   p.lines = groupLines(words);
   paintTextLayer(p);
 }
@@ -631,6 +1416,7 @@ async function extractPage(p) {
 // Hidden text layer: transparent spans positioned exactly over the glyphs
 function paintTextLayer(p) {
   const tl = p.textLayer; tl.innerHTML = '';
+  if (!p.live) return;                          // outside the page window: painted when the window reaches the page
   const W = p.cssW, H = p.cssH;                 // fixed sizes, so this works for a document that is not currently shown
   const frag = document.createDocumentFragment();
   p.unfit = false;
@@ -715,7 +1501,14 @@ function detectHeadings(p) {
 }
 
 function buildIndex(d) {
-  const flat = d.pages.filter(p => p.ocrState === 'done').flatMap(detectHeadings);
+  if (!d || d.closed) return;                    // a closed document keeps the index it had
+  computeIndex(d, d.pages.filter(p => p.ocrState === 'done'));
+  if (d === doc || sideTab === 'master') renderTree();
+}
+function computeIndex(d, donePages) {
+  // detected headings are recomputed every time; manual entries (§5) live in d.manualIndex and are merged in reading order
+  const manual = (d.manualIndex || []).map(m => ({ title: m.title, page: m.page, y: m.y, level: m.level, kind: 'manual', docId: d.id, id: m.id }));
+  const flat = [...donePages.flatMap(detectHeadings), ...manual].sort((a, b) => a.page - b.page || a.y - b.y);
   d.index = flat;
   // Stack-based tree: unbounded depth, nests by level number
   const root = { children: [] }, stack = [{ level: 0, node: root }];
@@ -727,16 +1520,16 @@ function buildIndex(d) {
     stack.push({ level: h.level, node });
   }
   d.tree = root;
-  if (d === doc || sideTab === 'master') renderTree();
 }
 // ---- left sidebar: "Document" (active document's outline) or "Master index" (every document + this workspace's clippings)
 let sideTab = 'doc', masterQuery = '';
-const masterCollapsed = new Set();             // doc ids folded in the master index
+const masterCollapsed = new Set();             // open doc ids folded in the master index
+const masterOpenClosed = new Set();            // closed doc ids unfolded in the master index (closed ones start folded)
 $('#sideTabs').addEventListener('click', e => {
   const b = e.target.closest('[data-side]'); if (!b) return;
   sideTab = b.dataset.side;
   $$('#sideTabs [data-side]').forEach(x => x.classList.toggle('active', x === b));
-  $('#masterFilter').hidden = sideTab !== 'master';
+  $('#masterFilter').hidden = sideTab !== 'master'; $('#idxBar').hidden = sideTab !== 'doc';
   renderTree();
 });
 $('#masterFilter').addEventListener('input', e => { masterQuery = e.target.value.trim().toLowerCase(); renderTree(); });
@@ -747,7 +1540,7 @@ function renderTree() {
 }
 function renderDocTree() {                   // sidebar shows the active document's outline
   const tree = $('#tree'); tree.innerHTML = '';
-  if (!doc) { tree.innerHTML = '<div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div>'; return; }
+  if (!doc) { tree.innerHTML = closedDocs.length ? `<div id="indexEmpty">No document is open. ${plural(closedDocs.length, 'closed document')} — reopen from the Master index.</div>` : '<div id="indexEmpty">Open a PDF — headings are detected as OCR completes.</div>'; return; }
   if (!doc.index.length) { tree.innerHTML = '<div id="indexEmpty">No headings detected yet…</div>'; return; }
   const walk = (nodes) => nodes.forEach(nd => {
     const a = document.createElement('a');
@@ -755,6 +1548,7 @@ function renderDocTree() {                   // sidebar shows the active documen
     a.innerHTML = `<span class="pg">p.${nd.page}</span>${escapeHtml(nd.title)}`;
     a.title = nd.title;
     a.onclick = () => scrollToPos(doc, nd.page, nd.y, true);
+    decorateIndexNode(a, nd, doc);
     tree.appendChild(a);
     walk(nd.children);
   });
@@ -765,33 +1559,37 @@ function renderDocTree() {                   // sidebar shows the active documen
 function renderMaster() {
   const tree = $('#tree'); tree.innerHTML = '';
   const f = masterQuery;
-  const clipLabel = c => (c.text || c.note || `Image clip · p.${c.source.page}`).replace(/\s+/g, ' ').trim().slice(0, 50);
-  const clipMatches = c => !f || clipLabel(c).toLowerCase().includes(f) || (c.text || '').toLowerCase().includes(f);
+  const clipLabel = c => (cardShownText(c) || c.note || `Image clip · p.${c.source.page}`).replace(/\s+/g, ' ').trim().slice(0, 50);
+  const clipMatches = c => !f || clipLabel(c).toLowerCase().includes(f) || (c.text || '').toLowerCase().includes(f) || (c.textTranslated || '').toLowerCase().includes(f);
   // this workspace's clippings, keyed by the heading they sit under (computed live: headings grow as OCR proceeds)
   const byKey = new Map(), orphans = [];
   const keyOf = h => `${h.docId}:${h.page}:${h.y}`;
   for (const c of ws.cards) {
     if (c.type !== 'clipping' || !c.source) continue;
-    const d = docById(c.source.docId);
+    const d = anyDocById(c.source.docId);
     if (!d) { orphans.push(c); continue; }
     const h = headingAt(d, c.source.page, c.source.bbox.y);
     const k = h ? keyOf(h) : `${d.id}:none`;
     if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(c);
   }
-  const clipEl = (c, depth) => {
+  // a closed document's heading / clipping reopens it first (round 4 §2)
+  const openThen = (d, fn) => d.closed ? () => ensureOpen(d.id).then(x => x && fn(x)) : () => fn(d);
+  const clipEl = (c, depth, d) => {
     const a = document.createElement('a'); a.className = 'mClip'; a.style.marginLeft = (14 + depth * 14) + 'px';
-    a.textContent = clipLabel(c); a.title = c.text || clipLabel(c);
-    a.onclick = () => focusCard(c);
+    a.textContent = clipLabel(c); a.title = cardShownText(c) || clipLabel(c);
+    a.onclick = d ? openThen(d, () => focusCard(c)) : () => focusCard(c);
     return a;
   };
-  if (!docs.length && !orphans.length) { tree.innerHTML = '<div id="indexEmpty">Open PDFs — every document in the case and this workspace\'s clippings are listed here.</div>'; return; }
-  for (const d of docs) {
-    const g = document.createElement('div'); g.className = 'mGroup'; g.style.setProperty('--dc', `hsl(${d.hue} 60% 45%)`);
+  if (!docs.length && !closedDocs.length && !orphans.length) { tree.innerHTML = '<div id="indexEmpty">Open PDFs — every document in the case and this workspace\'s clippings are listed here.</div>'; return; }
+  const order = [...docs, ...closedDocs.filter(r => !reopening.has(r.id))];
+  let divided = false;
+  for (const d of order) {
+    const g = document.createElement('div'); g.className = 'mGroup' + (d.closed ? ' closed' : ''); g.style.setProperty('--dc', `hsl(${d.hue} 60% 45%)`); g.dataset.doc = d.id;
     const nClips = [...byKey].filter(([k]) => k.startsWith(d.id + ':')).reduce((s, [, v]) => s + v.length, 0);
     const body = document.createElement('div'); body.className = 'mBody';
     let any = false;
     const loose = (byKey.get(`${d.id}:none`) || []).filter(clipMatches);
-    if (loose.length) { any = true; const t = document.createElement('div'); t.className = 'mEmpty'; t.textContent = 'Before the first heading'; body.appendChild(t); loose.forEach(c => body.appendChild(clipEl(c, 1))); }
+    if (loose.length) { any = true; const t = document.createElement('div'); t.className = 'mEmpty'; t.textContent = 'Before the first heading'; body.appendChild(t); loose.forEach(c => body.appendChild(clipEl(c, 1, d))); }
     const walk = (nodes, depth) => {              // returns a fragment of visible nodes (a heading shows if it, a clip or a descendant matches)
       const frag = document.createDocumentFragment(); let vis = false;
       for (const nd of nodes) {
@@ -805,9 +1603,11 @@ function renderMaster() {
         a.className = `node l${Math.min(6, depth)} ${nd.kind === 'annex' ? 'annex' : ''}`;
         a.innerHTML = `<span class="pg">p.${nd.page}</span>${clips.length ? `<span class="badge" title="${clips.length} clipping${clips.length > 1 ? 's' : ''} in this workspace">${clips.length}</span>` : ''}${escapeHtml(nd.title)}`;
         a.title = nd.title;
-        a.onclick = () => scrollToPos(d, nd.page, nd.y, true);
+        a.onclick = openThen(d, x => scrollToPos(x, nd.page, nd.y, true));
+        if (!d.closed) decorateIndexNode(a, nd, d);   // manual entries of a closed document are edited once it is reopened
+        else if (nd.kind === 'manual') $('.pg', a).insertAdjacentHTML('afterend', '<span class="mi">✎</span>');
         frag.appendChild(a);
-        shown.forEach(c => frag.appendChild(clipEl(c, depth)));
+        shown.forEach(c => frag.appendChild(clipEl(c, depth, d)));
         frag.appendChild(kids.frag);
       }
       return { frag, vis };
@@ -815,22 +1615,89 @@ function renderMaster() {
     const r = walk(d.tree?.children || [], 1);
     if (r.vis) { any = true; body.appendChild(r.frag); }
     if (f && !any) continue;
-    if (!any) { const t = document.createElement('div'); t.className = 'mEmpty'; t.textContent = d.pages.length && d.pages.every(p => p.ocrState === 'done') ? 'No headings detected' : 'Headings appear as OCR completes…'; body.appendChild(t); }
-    const folded = masterCollapsed.has(d.id) && !f;
+    if (!any) {
+      const t = document.createElement('div'); t.className = 'mEmpty';
+      const allRead = d.closed ? (d.ocr?.pages || []).filter(Boolean).length >= d.pageCount : d.pages.length && d.pages.every(p => p.ocrState === 'done');
+      t.textContent = allRead ? 'No headings detected' : d.closed ? 'No headings yet — OCR resumes when reopened' : 'Headings appear as OCR completes…'; body.appendChild(t);
+    }
+    if (d.closed && !divided) {                   // closed documents are grouped last, under a divider
+      divided = true;
+      const dv = document.createElement('div'); dv.className = 'mDivider'; dv.textContent = 'Closed documents'; tree.appendChild(dv);
+    }
+    // closed documents are folded by default (masterOpenClosed = the ones unfolded); open ones are unfolded by default
+    const folded = !f && (d.closed ? !masterOpenClosed.has(d.id) : masterCollapsed.has(d.id));
     g.classList.toggle('collapsed', folded);
     const hd = document.createElement('div'); hd.className = 'mHead';
-    hd.innerHTML = `<span class="tw">${folded ? '▶' : '▼'}</span><i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span><span class="ct">${d.index.length} h · ${nClips} clip${nClips === 1 ? '' : 's'}</span>`;
-    hd.onclick = () => { masterCollapsed.has(d.id) ? masterCollapsed.delete(d.id) : masterCollapsed.add(d.id); renderMaster(); };
+    hd.title = 'Right-click for Reopen / Close, Rename, Delete';
+    hd.innerHTML = `<span class="tw">${folded ? '▶' : '▼'}</span><i></i><span class="nm" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span>${d.closed ? '<span class="ctag">closed</span><a class="reopen" title="Reopen this document">Reopen</a>' : ''}<span class="ct">${d.index.length} h · ${nClips} clip${nClips === 1 ? '' : 's'}</span>`;
+    hd.onclick = e => {
+      if (e.target.closest('.reopen')) { reopenDocument(d); return; }
+      const set = d.closed ? masterOpenClosed : masterCollapsed;
+      set.has(d.id) ? set.delete(d.id) : set.add(d.id); renderMaster();
+    };
+    hd.oncontextmenu = e => { e.preventDefault(); openDocMenu(d, e.clientX, e.clientY); };
     g.append(hd, body); tree.appendChild(g);
   }
   const lost = orphans.filter(clipMatches);
   if (lost.length) {
     const g = document.createElement('div'); g.className = 'mGroup';
-    g.innerHTML = `<div class="mHead"><span class="tw"></span><i style="background:#aaa"></i><span class="nm">Closed documents</span><span class="ct">${lost.length}</span></div>`;
+    g.innerHTML = `<div class="mHead"><span class="tw"></span><i style="background:#aaa"></i><span class="nm">Missing documents</span><span class="ct">${lost.length}</span></div>`;
     lost.forEach(c => g.appendChild(clipEl(c, 0))); tree.appendChild(g);
   }
   if (!tree.children.length) tree.innerHTML = `<div id="indexEmpty">Nothing matches “${escapeHtml(f)}”.</div>`;
 }
+// ---- manual index entries (round 3 §5): ✎ marker, double-click to rename, right-click → Delete / Promote / Demote
+function clampLevel(l) { l = Math.round(+l); return Number.isFinite(l) ? Math.min(6, Math.max(1, l)) : 2; }
+const manualOf = (d, id) => d?.manualIndex.find(m => m.id === id);
+function decorateIndexNode(a, nd, d) {
+  if (nd.kind !== 'manual') return;
+  a.classList.add('manual'); a.dataset.mid = nd.id;
+  const pg = $('.pg', a); pg.insertAdjacentHTML('afterend', '<span class="mi" title="Added by you — double-click to rename, right-click for more">✎</span>');
+  a.ondblclick = e => { e.preventDefault(); renameIndexEntry(d, nd.id, a); };
+  a.oncontextmenu = e => { e.preventDefault(); openIndexMenu(d, nd.id, e.clientX, e.clientY); };
+}
+function entryFromSelection(sel) {            // first line of the selection (≤ 80 chars), or "Clipping p.N" for an image-only one
+  const first = (sel.text || '').split('\n').map(s => s.replace(/\s+/g, ' ').trim()).find(Boolean) || '';
+  return { title: first ? (first.length > 80 ? first.slice(0, 79).trimEnd() + '…' : first) : `Clipping p.${sel.page}`, page: sel.page, y: Math.max(0, sel.bbox.y), level: 2 };
+}
+function addIndexEntry(d, e) {
+  if (!d) return null;
+  const page = Math.min(d.pages.length || 1, Math.max(1, Math.round(+e.page) || 1));
+  const m = { id: uid(), title: String(e.title || 'New heading').trim() || 'New heading', page, y: Math.min(1, Math.max(0, +e.y || 0)), level: clampLevel(e.level ?? 2) };
+  d.manualIndex.push(m);
+  buildIndex(d); refreshMaster(); changed();
+  setStatus(`Added “${m.title}” to the index of ${d.name} (p.${m.page})`);
+  return m;
+}
+function updateIndexEntry(d, id, fn) { const m = manualOf(d, id); if (!m) return; fn(m); buildIndex(d); refreshMaster(); changed(); }
+function deleteIndexEntry(d, id) { if (!manualOf(d, id)) return; d.manualIndex = d.manualIndex.filter(m => m.id !== id); buildIndex(d); refreshMaster(); changed(); }
+function renameIndexEntry(d, id, a) {
+  const m = manualOf(d, id); if (!m) return;
+  a = a || $(`#tree .node[data-mid="${id}"]`); if (!a) return;
+  const inp = document.createElement('input'); inp.className = 'miEdit'; inp.value = m.title;
+  a.onclick = null; a.textContent = ''; a.append(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = save => { if (done) return; done = true; const v = inp.value.trim(); if (save && v && v !== m.title) updateIndexEntry(d, id, x => x.title = v); else renderTree(); };
+  inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); };
+  inp.onblur = () => finish(true); inp.onclick = ev => ev.stopPropagation();
+}
+function openIndexMenu(d, id, x, y) {
+  const m = manualOf(d, id); if (!m) return;
+  transMenu.innerHTML = ''; transMenu.dataset.kind = 'index';
+  const item = (label, fn, dis = false) => { const bt = document.createElement('button'); bt.setAttribute('role', 'menuitem'); bt.textContent = label; bt.disabled = dis; bt.onclick = () => { closeTransMenu(); fn(); }; transMenu.appendChild(bt); };
+  item('Rename', () => renameIndexEntry(d, id));
+  item('Promote (level up)', () => updateIndexEntry(d, id, x => x.level = clampLevel(x.level - 1)), m.level <= 1);
+  item('Demote (level down)', () => updateIndexEntry(d, id, x => x.level = clampLevel(x.level + 1)), m.level >= 6);
+  item('Delete this entry', () => deleteIndexEntry(d, id));
+  showMenuAt(x, y);
+}
+$('#addHeading').onclick = () => {
+  if (selection) { const s = selection; addIndexEntry(s.doc, entryFromSelection(s)); hideSelection(); window.getSelection()?.removeAllRanges(); return; }
+  if (!doc) { setStatus('Open a document first'); return; }
+  const m = addIndexEntry(doc, { title: 'New heading', page: currentPageNo() || 1, y: 0.02, level: 2 });
+  if (sideTab !== 'doc') return;
+  requestAnimationFrame(() => renameIndexEntry(doc, m.id));
+};
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function headingAt(d, page, y) {            // nearest heading at/above a position → "¶ B." label
@@ -865,8 +1732,13 @@ function scrollToPos(d, page, y, flash = false, bbox = null) {
   if (!d) return;
   activateDoc(d);                                     // switch tabs if the target is another document
   const p = d.pages[page - 1]; if (!p) return;
-  if (view === 'board') reader.scrollTo({ left: p.el.offsetLeft - (reader.clientWidth - p.cssW) / 2, behavior: 'smooth' });
+  if (view === 'board') {
+    const to = { left: p.el.offsetLeft - (reader.clientWidth - p.cssW) / 2, behavior: 'smooth' };
+    if (p.cssH > reader.clientHeight - 40) to.top = Math.max(0, p.el.offsetTop + (bbox ? bbox.y : y) * p.cssH - reader.clientHeight / 3);   // zoomed: bring the spot into view vertically too
+    reader.scrollTo(to);
+  }
   else reader.scrollTo({ top: p.el.offsetTop + y * p.el.clientHeight - 24, behavior: 'smooth' });
+  setLive(p, true); scheduleWindow();                 // the target page wakes up at once (its text layer carries the find highlights)
   if (flash || bbox) {
     const b = bbox || { x: 0.02, y: y - 0.004, w: 0.96, h: 0.03 };
     const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -879,22 +1751,498 @@ function scrollToPos(d, page, y, flash = false, bbox = null) {
 // =====================================================================
 //  SEARCH over the OCR layer
 // =====================================================================
-let query = '';
-$('#search').addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  query = e.target.value.trim().toLowerCase();
-  const all = docs.flatMap(d => d.pages);
-  all.forEach(applySearch);
-  if (!query || !doc) return;
-  // search the active document first, then the others
-  const order = [...doc.pages, ...all.filter(p => p.doc !== doc)];
-  const hitPage = order.find(p => p.words?.some(w => w.text.toLowerCase().includes(query)));
-  if (hitPage) { const w = hitPage.words.find(w => w.text.toLowerCase().includes(query)); scrollToPos(hitPage.doc, hitPage.n, w.y, false, { x: w.x - 0.005, y: w.y - 0.005, w: w.w + 0.01, h: w.h + 0.01 }); setStatus(`Found "${query}" in ${hitPage.doc.name}, page ${hitPage.n}`); }
-  else setStatus(`"${query}" not found (in OCR'd pages)`);
+// The find box hides behind the 🔍 icon at the right end of the top bar; Ctrl+F (or the icon) opens it, Enter / Shift+Enter
+// step through the matches (active document first, then the others), Esc closes it and clears the highlights.
+let query = '', findHits = [], findAt = -1;
+const findBox = $('#findBox'), searchInp = $('#search'), findCountEl = $('#findCount');
+const findOpen = () => findBox.classList.contains('show');
+function openFind() {
+  findBox.classList.add('show'); $('#findBtn').classList.add('on');
+  searchInp.focus(); searchInp.select();
+}
+function closeFind() {
+  findBox.classList.remove('show'); $('#findBtn').classList.remove('on');
+  if (query) { query = ''; findHits = []; findAt = -1; docs.flatMap(d => d.pages).forEach(applySearch); }
+  updateFindCount();
+  if (document.activeElement === searchInp) searchInp.blur();
+}
+$('#findBtn').onclick = () => findOpen() ? closeFind() : openFind();
+$('#findClose').onclick = closeFind;
+$('#findNext').onclick = () => runFind(1);
+$('#findPrev').onclick = () => runFind(-1);
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
+  if (document.querySelector('dialog[open]')) return;
+  e.preventDefault(); openFind();
 });
+document.addEventListener('click', e => { if (findOpen() && !e.target.closest('#findWrap') && !query) closeFind(); });   // an empty box closes on a click elsewhere
+searchInp.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Escape') { closeFind(); return; }
+  if (e.key === 'Enter') runFind(e.shiftKey ? -1 : 1);
+});
+// every match in reading order: a word of the original text, or (overlay on) a translated patch
+function collectHits() {
+  const all = docs.flatMap(d => d.pages);
+  const order = doc ? [...doc.pages, ...all.filter(p => p.doc !== doc)] : all;
+  const hits = [];
+  for (const p of order) {
+    for (const w of p.words || []) if (w.text.toLowerCase().includes(query)) hits.push({ p, box: { x: w.x - 0.005, y: w.y - 0.005, w: w.w + 0.01, h: w.h + 0.01 } });
+    if (p.doc.viewTranslated) for (const b of transOfPage(p)?.blocks || []) if (!b.pinned && b.translated.toLowerCase().includes(query)) hits.push({ p, box: { x: b.box.x - 0.005, y: b.box.y - 0.005, w: b.box.w + 0.01, h: b.box.h + 0.01 }, trans: true });
+  }
+  return hits;
+}
+function runFind(dir) {
+  const q = searchInp.value.trim().toLowerCase();
+  const fresh = q !== query;
+  query = q;
+  if (fresh) { docs.flatMap(d => d.pages).forEach(applySearch); findAt = -1; }
+  findHits = query ? collectHits() : [];           // recollected every step: pages keep getting OCR'd while you search
+  if (!query) { updateFindCount(); return; }
+  if (!findHits.length) { findAt = -1; updateFindCount(); setStatus(`"${query}" not found (in OCR'd${docs.some(d => d.viewTranslated) ? ' or translated' : ''} pages)`); return; }
+  findAt = (findAt + dir + findHits.length) % findHits.length;
+  const h = findHits[findAt];
+  scrollToPos(h.p.doc, h.p.n, h.box.y, false, h.box);
+  setStatus(`Match ${findAt + 1} of ${findHits.length} for "${query}" — ${h.p.doc.name}, page ${h.p.n}${h.trans ? ' (translation)' : ''}`);
+  updateFindCount();
+}
+function updateFindCount() {
+  findCountEl.textContent = !query ? '' : findHits.length ? `${findAt + 1} / ${findHits.length}` : '0 / 0';
+  $('#findPrev').disabled = $('#findNext').disabled = !!query && !findHits.length;
+}
 function applySearch(p) {
-  if (!p.words) return;
-  $$('span', p.textLayer).forEach(s => s.classList.toggle('hit', !!query && p.words[+s.dataset.i].text.toLowerCase().includes(query)));
+  if (p.words) $$('span', p.textLayer).forEach(s => s.classList.toggle('hit', !!query && p.words[+s.dataset.i].text.toLowerCase().includes(query)));
+  if (p.doc.viewTranslated && transOfPage(p)?.blocks.length) paintTrans(p);   // hits inside patches are marked in the patch
+}
+
+// =====================================================================
+//  TRANSLATION LAYER (docs/SPEC-translation.md §4): Lens-style patches per paragraph block
+// =====================================================================
+// d.trans = { target, source, pages: [ { n, detectedLang, blocks: [Block] } | null ] }   (index n - 1)
+// Block = { text, translated, detectedLang, box: {x,y,w,h} (page fractions), fontSize (fraction of page height), lineCount, pinned?, machine? }
+const transOfPage = p => p.doc.trans?.pages[p.n - 1] || null;
+function cleanBlock(b) {
+  const o = { text: b.text, translated: b.translated, detectedLang: b.detectedLang || '', box: { x: +b.box.x, y: +b.box.y, w: +b.box.w, h: +b.box.h }, fontSize: +b.fontSize || +b.box.h, lineCount: b.lineCount || 1 };
+  if (b.pinned) o.pinned = true;
+  if (b.machine !== undefined && b.machine !== null) o.machine = b.machine;
+  if (b.manual) { o.manual = true; if (b.region) o.region = { x: +b.region.x, y: +b.region.y, w: +b.region.w, h: +b.region.h }; }   // §7.2 region blocks
+  return o;
+}
+// `whole`: the page went through whole-document translation (region-only pages have whole: false)
+const transOf = d => d.trans ? { target: d.trans.target, source: d.trans.source || '', pages: d.pages.map((p, i) => { const t = d.trans.pages[i]; return t ? { n: p.n, detectedLang: t.detectedLang, whole: !!t.whole, blocks: t.blocks.map(cleanBlock) } : null; }) } : null;
+const hasTrans = d => !!d?.trans?.pages.some(t => t?.blocks.length);
+const PATCH_PAD = 2;
+
+// ---- clipping cards follow the translation of their source page (round 3 §2)
+// textTranslated = the translated text of every block lying ≥ 40 % (of the block's area) inside the clipping's box, top to bottom.
+// undefined = the source document is not open (keep what the card stored).
+function clipTranslated(c) {
+  const d = c.source && docById(c.source.docId); if (!d || !d.pages.length) return undefined;
+  const t = d.trans?.pages[c.source.page - 1]; if (!t?.blocks.length) return null;
+  const bs = t.blocks.filter(b => overlapFrac(b.box, c.source.bbox) >= 0.4).sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
+  const s = bs.map(b => (b.translated || '').trim()).filter(Boolean).join('\n');
+  return s || null;
+}
+// a page's translation changed (whole document, region, edit, remove): update the cards of every workspace cut from it
+function refreshClipTrans(d, n = null) {
+  if (!d) return;
+  let any = false;
+  for (const w of workspaces) for (const c of w.cards) {
+    if (c.type !== 'clipping' || c.source?.docId !== d.id || (n != null && c.source.page !== n)) continue;
+    const v = clipTranslated(c); if (v === undefined || v === c.textTranslated) continue;
+    c.textTranslated = v; any = true;
+    if (!v) c.showTranslated = false;
+    else if (c.wantTranslated) { c.showTranslated = true; c.wantTranslated = false; }   // the EN segment asked for this
+    renderCardText(c);
+  }
+  if (any) { refreshMaster(); changed(); }
+}
+
+function paintTrans(p) {
+  const layer = p.transEl; if (!layer) return;
+  if (layer.querySelector('.editing')) return;            // never rebuild under the user's cursor
+  layer.innerHTML = ''; p.transUnfit = false;
+  if (!p.live) return;                                    // outside the page window
+  const t = transOfPage(p);
+  if (!p.doc.viewTranslated || !t?.blocks.length) return;
+  if (!p.transColors && p.rendered && p.canvas.width) { try { p.transColors = sampleBlockColors(p.canvas, t.blocks); } catch (err) { console.warn(err); } }
+  const W = p.cssW, H = p.cssH;
+  t.blocks.forEach((b, i) => {
+    const el = document.createElement('div'); el.className = 'block'; el.dataset.i = i;
+    Object.assign(el.style, { left: b.box.x * W - PATCH_PAD + 'px', top: b.box.y * H - PATCH_PAD + 'px', width: b.box.w * W + PATCH_PAD * 2 + 'px', height: b.box.h * H + PATCH_PAD * 2 + 'px' });
+    if (b.pinned) { el.classList.add('pinned'); el.title = 'Showing the original — right-click to show the translation'; }
+    else {
+      const c = p.transColors?.[i];
+      el.style.background = c ? `rgb(${c.bg.join(',')})` : '#fff'; el.style.color = c ? `rgb(${c.fg.join(',')})` : '#111';
+      if (b.lineCount === 1) el.classList.add('single');
+      el.title = 'Hold to see the original · double-click to edit · right-click for more';
+      setPatchText(el, b.translated);
+    }
+    layer.appendChild(el);
+    wirePatch(p, el, i);
+    if (!b.pinned) fitPatch(p, el, b);
+  });
+}
+function setPatchText(el, text) {                  // translated text, with search hits wrapped in <mark>
+  el.textContent = '';
+  const span = document.createElement('span');     // one wrapper so flex layout (single-line blocks) keeps spaces around marks
+  const lo = text.toLowerCase();
+  if (!query || !lo.includes(query)) span.textContent = text;
+  else { let at = 0, i; while ((i = lo.indexOf(query, at)) >= 0) { span.append(text.slice(at, i)); const m = document.createElement('mark'); m.className = 'hit'; m.textContent = text.slice(i, i + query.length); span.append(m); at = i + query.length; } span.append(text.slice(at)); }
+  el.appendChild(span);
+}
+function fitPatch(p, el, b) {                      // fitFontSize: largest size that fits; still overflowing at the minimum → grow downwards
+  const H = p.cssH;
+  el.style.height = b.box.h * H + PATCH_PAD * 2 + 'px';
+  if (!el.clientHeight) { p.transUnfit = true; el.style.fontSize = Math.max(6, b.fontSize * H) + 'px'; return; }   // hidden document: refit when shown
+  const fits = size => { el.style.fontSize = size + 'px'; return el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1; };
+  const max = Math.max(6, b.fontSize * H * 1.1);
+  const size = fitFontSize(fits, Math.min(6, max), max);
+  el.style.fontSize = size + 'px';
+  if (!fits(size)) el.style.height = 'auto';
+}
+function wirePatch(p, el, i) {
+  const block = () => transOfPage(p)?.blocks[i];
+  el.addEventListener('contextmenu', e => { if (el.classList.contains('editing')) return; e.preventDefault(); openTransMenu(p, i, e.clientX, e.clientY); });
+  if (block()?.pinned) return;
+  // press-and-hold = peek at the original underneath
+  const endPeek = () => el.classList.remove('peek');
+  el.addEventListener('pointerdown', e => {
+    if (el.classList.contains('editing') || e.button !== 0) return;
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    el.classList.add('peek');
+  });
+  el.addEventListener('pointerup', endPeek); el.addEventListener('pointercancel', endPeek); el.addEventListener('lostpointercapture', endPeek);
+  el.addEventListener('dblclick', () => { endPeek(); editPatch(p, i); });
+}
+function editPatch(p, i) {
+  const b = transOfPage(p)?.blocks[i]; if (!b || b.pinned) return;
+  const el = p.transEl.querySelector(`.block[data-i="${i}"]`); if (!el) return;
+  el.classList.remove('peek', 'single'); el.classList.add('editing');
+  el.textContent = b.translated;
+  el.contentEditable = 'true'; el.spellcheck = true;
+  el.style.minHeight = el.style.height; el.style.height = 'auto';
+  el.focus();
+  const range = document.createRange(); range.selectNodeContents(el); getSelection()?.removeAllRanges(); getSelection()?.addRange(range);
+  let done = false;
+  const finish = commit => {
+    if (done) return; done = true;
+    const text = el.innerText.trim();
+    el.contentEditable = 'false'; el.classList.remove('editing');
+    if (commit && text && text !== b.translated) {
+      if (b.machine === undefined) b.machine = b.translated;   // remembered the first time, for "Restore machine translation"
+      b.translated = text; changed(); refreshClipTrans(p.doc, p.n);
+    }
+    paintTrans(p);
+  };
+  el.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  el.addEventListener('blur', () => finish(true));
+}
+const transMenu = $('#transMenu');
+function openTransMenu(p, i, x, y) {
+  const b = transOfPage(p)?.blocks[i]; if (!b) return;
+  transMenu.innerHTML = ''; transMenu.dataset.kind = 'block';
+  const item = (label, fn) => { const bt = document.createElement('button'); bt.setAttribute('role', 'menuitem'); bt.textContent = label; bt.onclick = () => { closeTransMenu(); fn(); }; transMenu.appendChild(bt); };
+  if (!b.pinned) item('Edit translation', () => editPatch(p, i));
+  item(b.pinned ? 'Show translation (unpin)' : 'Always show original (pin)', () => { b.pinned = !b.pinned || undefined; if (!b.pinned) delete b.pinned; paintTrans(p); changed(); });
+  if (b.machine !== undefined) item('Restore machine translation', () => { b.translated = b.machine; delete b.machine; paintTrans(p); changed(); refreshClipTrans(p.doc, p.n); });
+  item('Remove this translation', () => removeBlock(p, b));
+  showMenuAt(x, y);
+}
+function showMenuAt(x, y) {
+  transMenu.classList.add('show');
+  transMenu.style.left = Math.max(4, Math.min(x, innerWidth - transMenu.offsetWidth - 8)) + 'px';
+  transMenu.style.top = Math.max(4, Math.min(y, innerHeight - transMenu.offsetHeight - 8)) + 'px';
+}
+function removeBlock(p, b) {
+  const t = transOfPage(p); if (!t) return;
+  t.blocks = t.blocks.filter(x => x !== b); p.transColors = null;
+  if (!t.blocks.length && !t.whole) p.doc.trans.pages[p.n - 1] = null;
+  paintTrans(p); updateTransUi(); changed(); refreshClipTrans(p.doc, p.n);
+}
+function removePageTranslations(p) {
+  if (!p?.doc.trans) { banner('No translations on this page'); return; }
+  p.transWanted = false; p.transErr = null; p.transColors = null;
+  p.doc.trans.pages[p.n - 1] = null;
+  paintTrans(p); updateTransUi(); changed(); refreshClipTrans(p.doc, p.n);
+  banner(`Removed the translations on page ${p.n}`);
+}
+const closeTransMenu = () => transMenu.classList.remove('show');
+transMenu.addEventListener('pointerdown', e => e.stopPropagation());
+addEventListener('pointerdown', e => { if (!e.target.closest?.('#transBtn')) closeTransMenu(); }); addEventListener('blur', closeTransMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTransMenu(); });
+// a selection (text or lasso) under a patch lifts that patch while the selection is active
+function liftPatches(p, rects) {
+  $$('.trans .block.lift').forEach(el => el.classList.remove('lift'));
+  const t = p && transOfPage(p); if (!t || !p.doc.viewTranslated) return;
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  t.blocks.forEach((b, i) => { if (rects.some(r => hit(r, b.box))) p.transEl.querySelector(`.block[data-i="${i}"]`)?.classList.add('lift'); });
+}
+
+// ---- view toggle (§7.1): Original | Translated. Only shows / hides patches that exist; never calls Google.
+function setViewTranslated(d, on) {
+  if (!d) return;
+  d.viewTranslated = !!on;
+  d.pagesEl.classList.toggle('transOn', d.viewTranslated);
+  d.pages.forEach(paintTrans);
+  if (!d.viewTranslated) hideSelection();
+  updateTransUi(); changed();
+  if (d.viewTranslated && d === doc && !hasTrans(d)) banner('No translations yet — use 文A → Translate whole document, or ⬚文 to translate a region');
+}
+// after a translate action produced blocks: show them, unless Settings says documents open as Original
+function showTranslatedPerSetting(d) { if (settings.transView === 'translated' && !d.viewTranslated) setViewTranslated(d, true); }
+$('#viewSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b && doc) setViewTranslated(doc, b.dataset.view === '1'); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 't' && e.key !== 'T') return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('[contenteditable="true"], input, textarea, select') || document.querySelector('dialog[open]')) return;
+  if (doc) { e.preventDefault(); setViewTranslated(doc, !doc.viewTranslated); }
+});
+function updateTransUi() {
+  const on = !!doc?.viewTranslated, any = hasTrans(doc);
+  $('#viewSeg').hidden = !doc;
+  $$('#viewSeg [data-view]').forEach(b => b.classList.toggle('on', (b.dataset.view === '1') === on));
+  $('#viewSeg [data-view="1"]').classList.toggle('none', !any);
+  $('#viewSeg [data-view="1"]').title = any ? 'Show the translation patches (T)' : 'No translations yet — use 文A or ⬚文';
+  $('#transBtn').classList.toggle('active', on && any);
+  $('#caseViewItem').firstChild.textContent = on ? 'Show original' : 'Show translated';
+}
+// ---- 文A: a small menu of translate actions
+$('#transBtn').onclick = e => {
+  e.stopPropagation();
+  if (transMenu.classList.contains('show') && transMenu.dataset.kind === 'actions') { closeTransMenu(); return; }
+  transMenu.innerHTML = ''; transMenu.dataset.kind = 'actions';
+  const item = (label, fn, title = '') => { const bt = document.createElement('button'); bt.setAttribute('role', 'menuitem'); bt.textContent = label; bt.title = title; bt.onclick = () => { closeTransMenu(); fn(); }; transMenu.appendChild(bt); };
+  item('Translate whole document', () => translateWholeUI(), 'Reads every page (re-reading pages whose OCR used other settings) and translates them with Google');
+  item('Translate a region (drag)', () => selectTool('region'), 'Drag a rectangle on a page; that area is read and translated');
+  item('Remove all translations on this page', () => doc ? removePageTranslations(doc.pages[currentPageNo() - 1]) : setStatus('Open a document first'));
+  const r = e.currentTarget.getBoundingClientRect();
+  transMenu.classList.add('show');
+  showMenuAt(r.left - transMenu.offsetWidth - 8, r.top);   // opens to the left of the toolbar
+};
+const NO_KEY = 'Add a Google Cloud API key in Settings to translate';
+function noKeyMessage() {                       // a key that exists but cannot be read says so, instead of "add a key"
+  const t = keyError && !apiKey ? `Could not read the saved Google API key (${keyError}). Paste the key again in Settings.` : NO_KEY;
+  setStatus(t); banner(t, 'err', 'settings');
+}
+// ---- banner at the top of the PDF pane (§7.1): progress, result or the exact Google error. Stays until replaced or dismissed.
+const bannerEl = $('#transBanner');
+let bannerState = { text: '', kind: '' };
+const BANNER_ACTIONS = { settings: ['Settings', () => openSettings()], retry: ['Retry', () => translateWholeUI()] };
+function banner(text, kind = '', actions = []) {
+  bannerState = { text: text || '', kind };
+  bannerEl.hidden = !text;
+  bannerEl.className = kind;
+  $('.msg', bannerEl).textContent = text || ''; $('.msg', bannerEl).title = text || '';
+  $$('a.act', bannerEl).forEach(a => a.remove());
+  for (const k of [].concat(actions || [])) {
+    const a = document.createElement('a'); a.className = 'act'; [a.textContent, a.onclick] = BANNER_ACTIONS[k];
+    $('.bx', bannerEl).before(a);
+  }
+  if (text && kind !== 'busy') setStatus(text);
+}
+$('.bx', bannerEl).onclick = () => banner('');
+// toast(text, true) shows a "Settings…" button; toast(text, { label, fn, ms, undo }) any action (undo = the trash entry it undoes)
+let toastTimer = null, toastAction = null, toastUndo = null;
+function toast(text, action = false) {
+  const act = action === true ? { label: 'Settings…', fn: () => openSettings() } : action || null;
+  $('#toastTxt').textContent = text;
+  $('#toastBtn').hidden = !act; if (act) $('#toastBtn').textContent = act.label;
+  toastAction = act?.fn || null; toastUndo = act?.undo || null;
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, act?.ms || 6000);
+}
+function hideToast() { clearTimeout(toastTimer); $('#toast').classList.remove('show'); toastAction = null; toastUndo = null; }
+$('#toastBtn').onclick = () => { const fn = toastAction; hideToast(); fn?.(); };
+// Ctrl+Z while a "Deleted … — Undo" toast is up undoes the delete (text fields keep their own undo)
+document.addEventListener('keydown', e => {
+  if (!toastUndo || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return;
+  if (e.target.closest?.('[contenteditable="true"], input, textarea, select') || document.querySelector('dialog[open]')) return;
+  e.preventDefault(); undoDelete(toastUndo);
+});
+
+// ---- prioritised translation queue (same priority as OCR: pages near the viewport first).
+// Only pages a translate action asked for (p.transWanted) are sent; viewing never calls Google.
+let transRunning = false, transCurrent = null;
+const transPending = () => docs.flatMap(d => d.pages).filter(p => p.transWanted && p.ocrState === 'done' && p.words && !p.transErr);
+const overlapFrac = (a, r) => {               // share of box a that lies inside r
+  const w = Math.min(a.x + a.w, r.x + r.w) - Math.max(a.x, r.x), h = Math.min(a.y + a.h, r.y + r.h) - Math.max(a.y, r.y);
+  return w > 0 && h > 0 ? (w * h) / Math.max(1e-9, a.w * a.h) : 0;
+};
+const transPair = d => ({ target: d.trans?.target || settings.target, source: d.trans ? d.trans.source || '' : settings.source });
+async function runTransQueue() {
+  if (transRunning || !transPending().length) return;
+  if (!apiKey) { noKeyMessage(); return; }      // no network call without a key
+  transRunning = true;
+  try {
+    while (true) {
+      const pending = transPending();
+      if (!pending.length || !apiKey) break;
+      pending.sort((a, b) => (b.priority || 0) - (a.priority || 0) || (b.doc === doc) - (a.doc === doc) || a.doc.id - b.doc.id || a.n - b.n);
+      const p = pending[0], d = p.doc, gen = d.transGen;
+      transCurrent = p;
+      try {
+        const blocks = p.ocrBlocks?.length ? p.ocrBlocks : layoutBlocks(p.words, p.w, p.h);
+        const { target, source } = transPair(d);
+        const r = await translateBlocks(blocks, { source, target, key: apiKey });
+        if (!docs.includes(d) || d.transGen !== gen || !p.transWanted) continue;
+        if (!d.trans) d.trans = { target, source, pages: [] };
+        // region blocks stay; whole-page blocks that fall mostly inside a region are left out
+        const manual = (d.trans.pages[p.n - 1]?.blocks || []).filter(b => b.manual);
+        const fresh = r.blocks.filter(b => !manual.some(m => overlapFrac(b.box, m.region || m.box) > 0.5));
+        d.trans.pages[p.n - 1] = { n: p.n, detectedLang: r.detectedLang, whole: true, blocks: [...fresh, ...manual] };
+        p.transWanted = false; p.transColors = null;
+        paintTrans(p); updateTransUi(); changed(); refreshClipTrans(d, p.n);
+      } catch (err) {
+        if (!docs.includes(d) || d.transGen !== gen) continue;
+        console.error(err); p.transErr = err.message || String(err);
+        setStatus(`Translation failed on page ${p.n}: ${p.transErr}`);
+      }
+    }
+  } finally { transRunning = false; transCurrent = null; }
+}
+// Settings changed the target or source language: translations made for the old pair are dropped; whole-translated pages are redone.
+function retranslateIfStale() {
+  for (const d of docs) {
+    if (!d.trans || (d.trans.target === settings.target && (d.trans.source || '') === settings.source)) continue;
+    const redo = d.pages.filter(p => transOfPage(p)?.whole);
+    d.transGen++; d.trans = null; d.pages.forEach(p => { p.transErr = null; p.transColors = null; paintTrans(p); });
+    redo.forEach(p => p.transWanted = true);
+    updateTransUi(); changed(); refreshClipTrans(d);
+  }
+  runTransQueue();
+}
+function translationState(id) {
+  const d = (id != null ? docById(id) : null) || doc; if (!d) return null;
+  const all = d.pages.flatMap(p => transOfPage(p)?.blocks || []);
+  return {
+    docId: d.id, viewTranslated: !!d.viewTranslated, on: !!d.viewTranslated, hasKey: !!apiKey, busy: transRunning || !!d.wholeRun,
+    target: d.trans?.target ?? null, source: d.trans?.source ?? null,
+    pages: d.pages.length, translated: d.pages.filter(p => transOfPage(p)?.whole).length, errors: d.pages.filter(p => p.transErr).map(p => ({ n: p.n, error: p.transErr })),
+    blocks: all.length, regionBlocks: all.filter(b => b.manual).length,
+    ocr: d.pages.map(p => ({ n: p.n, state: p.ocrState, source: p.source || null, engine: p.ocrEngine, langs: p.ocrLangs, blocked: p.ocrBlocked || null })),
+    pageDetail: d.pages.map(p => { const t = transOfPage(p); return t ? { n: p.n, detectedLang: t.detectedLang, whole: !!t.whole, blocks: t.blocks.map(cleanBlock) } : null; }),
+    banner: { ...bannerState }, status: statusTxt.textContent,
+  };
+}
+
+// ---- Translate whole document (§7.1): explicit action. Stale OCR is re-read first, then every page is translated.
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const engineLabel = () => settings.ocrEngine === 'vision' ? 'Google Vision' : `Tesseract (${settings.ocrLangs})`;
+const langName = c => [...$('#setTarget').options].find(o => o.value === c)?.textContent || c;
+const translateWholeUI = () => doc ? translateWhole(doc) : setStatus('Open a document first');
+async function translateWhole(d) {
+  if (!d) throw new Error('No document');
+  hideSelection();
+  if (!apiKey) await loadApiKey();               // the key may have been added since startup
+  if (!apiKey) { noKeyMessage(); return translationState(d.id); }
+  const run = { pages: [] }; d.wholeRun = run;
+  let reread = 0;
+  for (const p of d.pages) {
+    p.transErr = null;
+    if (p.ocrBlocked) { p.ocrBlocked = null; p.tag.textContent = 'queued'; p.tag.title = ''; }
+    const t = transOfPage(p);
+    if (ocrStale(p)) { resetPageOcr(p); reread++; p.transWanted = true; }      // English-only OCR of a Kannada page translates to nothing
+    else p.transWanted = !t?.whole || !t.blocks.some(b => !b.manual);         // not done yet, or it found nothing last time
+    if (p.transWanted) run.pages.push(p);
+  }
+  const N = run.pages.length;
+  if (reread) { buildIndex(d); renderTabs(); changed(); }
+  banner(N ? `${reread ? `Re-reading ${reread} page${reread > 1 ? 's' : ''} with ${engineLabel()}, then translating` : 'Translating'} ${N} page${N > 1 ? 's' : ''} with Google…` : '', 'busy');
+  runOcrQueue(); runTransQueue();
+  const failedOf = () => run.pages.filter(p => p.transErr || p.ocrBlocked || p.ocrState === 'error');
+  const t0 = Date.now();
+  while (N && Date.now() - t0 < 600000) {
+    if (!docs.includes(d) || d.wholeRun !== run) return translationState(d.id);   // closed, or a newer run took over
+    if (!apiKey) break;
+    const left = run.pages.filter(p => p.transWanted && !p.transErr && !p.ocrBlocked && p.ocrState !== 'error');
+    if (!left.length) break;
+    const done = N - left.length - failedOf().length;
+    if (transCurrent && run.pages.includes(transCurrent)) banner(`Translating page ${done + 1} of ${N} with Google…`, 'busy');
+    else if (left.some(p => p.ocrState !== 'done')) banner(`Reading page ${done + 1} of ${N} with ${engineLabel()}…`, 'busy');
+    if (!transRunning && transPending().length) runTransQueue();
+    await sleep(150);
+  }
+  d.wholeRun = null;
+  run.pages.forEach(p => { if (p.transErr || p.ocrBlocked) p.transWanted = false; });   // Retry asks again
+  const failed = failedOf(), total = d.pages.reduce((s, p) => s + (transOfPage(p)?.blocks.length || 0), 0);
+  if (total) showTranslatedPerSetting(d);
+  if (failed.length) {
+    const f = failed[0], what = f.transErr ? `Translation failed on page ${f.n}: ${f.transErr}` : `OCR failed on page ${f.n}: ${f.ocrBlocked || 'error'}`;
+    banner(`${what}${failed.length > 1 ? ` (${failed.length} pages failed)` : ''}`, 'err', ['settings', 'retry']);
+  } else if (!apiKey) noKeyMessage();
+  else if (!total) {
+    const engOnly = settings.ocrEngine === 'local' && settings.ocrLangs === 'eng';
+    banner(engOnly ? 'No translatable text found. The pages were read with English-only OCR — for Kannada choose Google Vision or Kannada in Settings, or drag ⬚文 over a region.'
+      : `No text needing translation was found (already in ${langName(transPair(d).target)}?)`, engOnly ? 'err' : '', engOnly ? 'settings' : []);
+  } else banner(`Translated ${d.pages.length} page${d.pages.length > 1 ? 's' : ''} · ${total} block${total > 1 ? 's' : ''}${d.viewTranslated ? '' : ' — choose Translated (T) to view'}`, 'ok');
+  return translationState(d.id);
+}
+
+// ---- Translate a region (§7.2): the crop is always OCR'd fresh — Google Vision when a key exists, else local Tesseract
+const regionHints = () => settings.source ? (settings.source === 'kn' ? ['kn', 'en'] : [settings.source]) : settings.ocrLangs === 'eng' ? [] : visionHints(settings.ocrLangs);
+function mergeRegionWords(p, r, words) {     // the region's OCR replaces the page words whose centre lies inside it
+  if (!p.words || p.source === 'text') return;
+  const inside = w => { const cx = w.x + w.w / 2, cy = w.y + w.h / 2; return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h; };
+  p.words = p.words.filter(w => !inside(w)).concat(words);
+  p.lines = groupLines(p.words); paintTextLayer(p);
+}
+async function translateRegion(docId, page, box) {
+  const d = (docId != null ? docById(docId) : null) || doc, p = d?.pages[page - 1];
+  if (!p) throw new Error('No such page');
+  const x0 = Math.max(0, Math.min(1, box.x)), y0 = Math.max(0, Math.min(1, box.y));
+  const bx = { x: x0, y: y0, w: Math.min(1, box.x + box.w) - x0, h: Math.min(1, box.y + box.h) - y0 };
+  if (!(bx.w >= 0.02 && bx.h >= 0.02)) { banner('Drag a larger rectangle — at least 2% of the page each way'); return { ok: false, reason: 'small' }; }
+  if (!apiKey) await loadApiKey();
+  const engine = apiKey ? 'vision' : 'local', gen = d.transGen;
+  banner(`Reading the selected region with ${engine === 'vision' ? 'Google Vision' : `Tesseract (${settings.ocrLangs})`}…`, 'busy');
+  try {
+    const full = await renderPage(p, visionScale(p));
+    const W = full.width, H = full.height;
+    const sx = Math.floor(bx.x * W), sy = Math.floor(bx.y * H), sw = Math.max(1, Math.min(W - sx, Math.round(bx.w * W))), sh = Math.max(1, Math.min(H - sy, Math.round(bx.h * H)));
+    const crop = document.createElement('canvas'); crop.width = sw; crop.height = sh;
+    crop.getContext('2d').drawImage(full, sx, sy, sw, sh, 0, 0, sw, sh);
+    full.width = full.height = 0;
+    const cb = { x: sx / W, y: sy / H, w: sw / W, h: sh / H };       // the crop in page fractions, after pixel rounding
+    let words, paras;
+    if (engine === 'vision') {
+      const r = await visionOcr(crop.toDataURL('image/jpeg', 0.92).split(',')[1], regionHints(), apiKey, sw, sh);
+      words = r.words; paras = r.paragraphs;
+    } else {
+      const worker = await getWorker(settings.ocrLangs);
+      const { data } = await worker.recognize(crop, {}, { text: true, blocks: true });
+      ({ words, blocks: paras } = tessParse(data, sw, sh, settings.ocrLangs));
+    }
+    crop.width = crop.height = 0;
+    if (!docs.includes(d)) return { ok: false, reason: 'closed' };
+    const toPage = b => ({ x: cb.x + b.x * cb.w, y: cb.y + b.y * cb.h, w: b.w * cb.w, h: b.h * cb.h });
+    words = words.map(w => ({ ...w, ...toPage(w) }));
+    paras = paras.map(b => ({ ...b, box: toPage(b.box), fontSize: b.fontSize * cb.h }));
+    if (!words.length) { banner(`No text found in the selected region (read with ${engine === 'vision' ? 'Google Vision' : 'Tesseract'})`); return { ok: false, reason: 'empty', engine, words: 0 }; }
+    mergeRegionWords(p, cb, words); changed();
+    if (!apiKey) { noKeyMessage(); return { ok: false, reason: 'nokey', engine, words: words.length }; }
+    banner('Translating the selected region with Google…', 'busy');
+    const { target, source } = transPair(d);
+    const r = await translateBlocks(paras.length ? paras : layoutBlocks(words, p.w, p.h), { source, target, key: apiKey });
+    if (!docs.includes(d) || d.transGen !== gen) return { ok: false, reason: 'stale' };
+    if (!r.blocks.length) { banner(`Nothing to translate in this region — the text is already in ${langName(target)}`); return { ok: false, reason: 'same-language', engine, words: words.length }; }
+    const nb = r.blocks.map(b => ({ ...b, manual: true, region: { ...cb } }));
+    if (!d.trans) d.trans = { target, source, pages: [] };
+    const t = d.trans.pages[p.n - 1] || { n: p.n, detectedLang: r.detectedLang, whole: false, blocks: [] };
+    t.blocks = t.blocks.filter(b => overlapFrac(b.box, cb) <= 0.5).concat(nb);   // replaces what the region covers
+    t.detectedLang ||= r.detectedLang;
+    d.trans.pages[p.n - 1] = t; p.transColors = null;
+    showTranslatedPerSetting(d); paintTrans(p); updateTransUi(); changed(); refreshClipTrans(d, p.n);
+    banner(`Translated the region on page ${p.n} · ${nb.length} block${nb.length > 1 ? 's' : ''}${d.viewTranslated ? '' : ' — choose Translated (T) to view'}`, 'ok');
+    return { ok: true, engine, words: words.length, blocks: nb.length };
+  } catch (err) {
+    console.error(err);
+    banner(err instanceof GoogleError ? `Google: ${err.message}` : `Region translation failed: ${err.message}`, 'err', 'settings');
+    return { ok: false, reason: 'error', error: err.message };
+  }
 }
 
 // =====================================================================
@@ -903,14 +2251,23 @@ function applySearch(p) {
 const pen = { pen: { color: '#1b4ea3', width: 3 }, hl: { color: '#ffe600', width: 22 } };
 const SWATCHES = { pen: ['#1b4ea3', '#1f1d1a', '#c0392b', '#1e8449', '#8e44ad'], hl: ['#ffe600', '#7bff6b', '#ff8ae2', '#6bd8ff', '#ffb34d'] };
 $('#pdfTools').addEventListener('click', e => {
-  const b = e.target.closest('[data-tool]'); if (!b) return;
-  tool = b.dataset.tool;
-  $$('#pdfTools [data-tool]').forEach(x => x.classList.toggle('active', x === b));
+  const b = e.target.closest('[data-tool]'); if (b) selectTool(b.dataset.tool);
+});
+function selectTool(t) {
+  tool = t;
+  $$('#pdfTools [data-tool]').forEach(x => x.classList.toggle('active', x.dataset.tool === t));
   reader.className = `tool-${tool} board`;
   hideSelection(); renderToolPop();
-});
+  if (t === 'region') banner(`Drag a rectangle over the text to translate${apiKey ? ' — it is read with Google Vision' : ''}`);
+}
 function renderToolPop() {
   const pop = $('#toolPop');
+  if (tool === 'lasso') {                       // lasso shape (§4): Free | Box, remembered in Settings
+    pop.innerHTML = `<span class="lbl">Lasso</span><span class="seg">${[['free', '◌ Free'], ['box', '▭ Box']].map(([v, l]) => `<button class="btn small${settings.lassoShape === v ? ' active' : ''}" data-shape="${v}" title="${v === 'box' ? 'Drag a rectangle' : 'Draw a freehand loop'}">${l}</button>`).join('')}</span>`;
+    pop.classList.add('show');
+    pop.onclick = ev => { const b = ev.target.closest('[data-shape]'); if (b) applySettings({ lassoShape: b.dataset.shape }); };
+    return;
+  }
   if (tool !== 'pen' && tool !== 'hl') { pop.classList.remove('show'); return; }
   const s = pen[tool];
   pop.innerHTML = SWATCHES[tool].map(c => `<span class="sw ${c === s.color ? 'on' : ''}" data-c="${c}" style="background:${c}"></span>`).join('') +
@@ -1057,7 +2414,9 @@ reader.addEventListener('pointerdown', e => {
   const pr = pageEl.getBoundingClientRect();
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('class', 'lasso');
   p.ovl.appendChild(path);
-  lasso = { p, pr, pts: [], path };
+  // box (§4): the polygon is the dragged rectangle's four corners; everything after release is the same as freehand
+  const box = settings.lassoShape === 'box', start = [(e.clientX - pr.left) / pr.width, (e.clientY - pr.top) / pr.height];
+  lasso = { p, pr, pts: box ? [] : [start], path, box, start };
   p.ovl.setPointerCapture(e.pointerId);
   hideSelection();
   e.preventDefault();
@@ -1065,13 +2424,15 @@ reader.addEventListener('pointerdown', e => {
 reader.addEventListener('pointermove', e => {
   if (!lasso) return;
   const { pr } = lasso;
-  lasso.pts.push([(e.clientX - pr.left) / pr.width, (e.clientY - pr.top) / pr.height]);
+  const pt = [(e.clientX - pr.left) / pr.width, (e.clientY - pr.top) / pr.height];
+  if (lasso.box) { const [x0, y0] = lasso.start, [x1, y1] = pt; lasso.pts = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; }
+  else lasso.pts.push(pt);
   lasso.path.setAttribute('d', 'M' + lasso.pts.map(([x, y]) => `${x * pr.width},${y * pr.height}`).join(' L') + ' Z');
 });
 reader.addEventListener('pointerup', e => {
   if (!lasso) return;
-  const { p, pts, path } = lasso; lasso = null; path.remove();
-  if (pts.length < 5) return;
+  const { p, pts, path, box } = lasso; lasso = null; path.remove();
+  if (box ? pts.length < 4 || Math.abs(pts[2][0] - pts[0][0]) < 0.01 || Math.abs(pts[2][1] - pts[0][1]) < 0.005 : pts.length < 5) return;
   if (!p.words) { setStatus('This page has not been OCR\'d yet — wait a moment'); return; }
   const inside = p.words.filter(w => pointInPoly([w.x + w.w / 2, w.y + w.h / 2], pts));
   if (!inside.length) {
@@ -1087,6 +2448,43 @@ reader.addEventListener('pointerup', e => {
   const lines = groupLines(inside);
   setSelection({ doc: p.doc, page: p.n, bbox: { x: x0 - 0.004, y: y0 - 0.004, w: x1 - x0 + 0.008, h: y1 - y0 + 0.008 }, text: lines.map(l => l.text).join('\n') });
   $$('span', p.textLayer).forEach(s => s.classList.toggle('inlasso', inside.includes(p.words[+s.dataset.i])));
+});
+// ---- region translate (⬚文): drag a rectangle; on release the area is OCR'd and translated (§7.2)
+let regionDrag = null;
+const pagePt = (pr, e) => [Math.max(0, Math.min(1, (e.clientX - pr.left) / pr.width)), Math.max(0, Math.min(1, (e.clientY - pr.top) / pr.height))];
+const setRectAttrs = (el, b) => { for (const [k, v] of [['x', b.x], ['y', b.y], ['width', b.w], ['height', b.h]]) el.setAttribute(k, v * 100 + '%'); };
+reader.addEventListener('pointerdown', e => {
+  if (tool !== 'region' || e.button !== 0) return;
+  const pageEl = e.target.closest('.page'); if (!pageEl) return;
+  const p = pageOf(pageEl); if (!p) return;
+  const pr = pageEl.getBoundingClientRect(), [x, y] = pagePt(pr, e);
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); rect.setAttribute('class', 'region'); rect.setAttribute('rx', 3);
+  setRectAttrs(rect, { x, y, w: 0, h: 0 }); p.ovl.appendChild(rect);
+  regionDrag = { p, pr, x0: x, y0: y, box: { x, y, w: 0, h: 0 }, rect };
+  p.ovl.setPointerCapture(e.pointerId);
+  hideSelection(); e.preventDefault();
+});
+reader.addEventListener('pointermove', e => {
+  if (!regionDrag) return;
+  const { pr, x0, y0 } = regionDrag, [x, y] = pagePt(pr, e);
+  regionDrag.box = { x: Math.min(x0, x), y: Math.min(y0, y), w: Math.abs(x - x0), h: Math.abs(y - y0) };
+  setRectAttrs(regionDrag.rect, regionDrag.box);
+});
+reader.addEventListener('pointerup', () => {
+  if (!regionDrag) return;
+  const { p, box, rect } = regionDrag; regionDrag = null;
+  if (box.w < 0.02 || box.h < 0.02) { rect.remove(); if (box.w > 0.003 || box.h > 0.003) banner('Drag a larger rectangle — at least 2% of the page each way'); return; }
+  rect.classList.add('busy');
+  translateRegion(p.doc.id, p.n, box).finally(() => rect.remove());
+});
+reader.addEventListener('pointercancel', () => { if (regionDrag) { regionDrag.rect.remove(); regionDrag = null; } });
+// with the region tool active the overlay takes the pointer: right-click still opens a patch's menu
+reader.addEventListener('contextmenu', e => {
+  if (tool !== 'region') return;
+  const pageEl = e.target.closest('.page'); const p = pageEl && pageOf(pageEl); if (!p?.doc.viewTranslated) return;
+  const [x, y] = pagePt(pageEl.getBoundingClientRect(), e);
+  const i = (transOfPage(p)?.blocks || []).findIndex(b => x >= b.box.x && x <= b.box.x + b.box.w && y >= b.box.y && y <= b.box.y + b.box.h);
+  if (i >= 0) { e.preventDefault(); openTransMenu(p, i, e.clientX, e.clientY); }
 });
 function pointInPoly([x, y], poly) {
   let inside = false;
@@ -1106,9 +2504,11 @@ function setSelection(s) {
   const left = p.el.offsetLeft + s.bbox.x * p.el.clientWidth, top = p.el.offsetTop + s.bbox.y * p.el.clientHeight;
   Object.assign(selBox.style, { display: 'block', left: left + 'px', top: top + 'px', width: s.bbox.w * p.el.clientWidth + 'px', height: s.bbox.h * p.el.clientHeight + 'px' });
   Object.assign(selChip.style, { display: 'block', left: left + s.bbox.w * p.el.clientWidth / 2 + 'px', top: top + 'px' });
+  liftPatches(p, s.rects?.length ? s.rects : [s.bbox]);
 }
 function hideSelection() {
   selection = null; selBox.style.display = selChip.style.display = 'none';
+  $$('.trans .block.lift').forEach(el => el.classList.remove('lift'));
   $$('.textLayer span.inlasso').forEach(s => s.classList.remove('inlasso'));
   $$('.page.focus').forEach(el => el.classList.remove('focus'));
 }
@@ -1127,9 +2527,9 @@ selChip.addEventListener('click', e => {
 const ghost = $('#ghost'); let drag = null, dragMoved = false;
 for (const src of [selBox, selChip]) src.addEventListener('pointerdown', e => {
   if (!selection) return;
-  drag = { sel: selection, sx: e.clientX, sy: e.clientY }; dragMoved = false;
+  drag = { sel: selection, sx: e.clientX, sy: e.clientY, label: selection.text ? selection.text.slice(0, 60) : `Image clip · page ${selection.page}` }; dragMoved = false;
   src.setPointerCapture(e.pointerId);
-  ghost.textContent = selection.text ? selection.text.slice(0, 60) : `Image clip · page ${selection.page}`;
+  ghost.textContent = drag.label;
   e.preventDefault();
 });
 document.addEventListener('pointermove', e => {
@@ -1137,11 +2537,18 @@ document.addEventListener('pointermove', e => {
   if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) dragMoved = true;
   if (!dragMoved) return;
   ghost.style.display = 'block'; ghost.style.left = e.clientX + 12 + 'px'; ghost.style.top = e.clientY + 12 + 'px';
+  // over the left sidebar the drop adds an index entry instead of a card (§5)
+  const onIdx = overIndex(e);
+  idxEl.classList.toggle('dropHover', onIdx);
+  ghost.textContent = onIdx ? `＋ Add to index: ${entryFromSelection(drag.sel).title}` : drag.label;
 });
+const idxEl = $('#index');
+const overIndex = e => { const r = idxEl.getBoundingClientRect(); return r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
 document.addEventListener('pointerup', e => {
   if (!drag) return;
-  const d = drag; drag = null; ghost.style.display = 'none';
+  const d = drag; drag = null; ghost.style.display = 'none'; idxEl.classList.remove('dropHover');
   if (!dragMoved) return;
+  if (overIndex(e)) { addIndexEntry(d.sel.doc, entryFromSelection(d.sel)); hideSelection(); window.getSelection()?.removeAllRanges(); return; }
   const r = wsEl.getBoundingClientRect();
   if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
     const [cx, cy] = toCanvas(e.clientX, e.clientY);
@@ -1172,7 +2579,8 @@ $('#fit').onclick = () => { ws.x = 40; ws.y = 40; ws.z = 1; applyView(); };
 $('#addNote').onclick = () => { const r = wsEl.getBoundingClientRect(); const [x, y] = toCanvas(r.left + r.width / 2, r.top + r.height / 2); addCard({ type: 'note', x: x - 140, y: y - 60, note: '' }).el.querySelector('.note').focus(); changed(); };
 $('#undoInk').onclick = () => { const s = ws.strokes.pop(); s?.el.remove(); if (s) changed(); };
 $('#exportWs').onclick = () => {
-  const data = { title: ws.title, documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length, annotations: d.pages.flatMap(p => p.annos.map(a => ({ page: p.n, ...markOf(a) }))) })), ...workspaceJson(ws) };
+  const data = { title: ws.title, documents: allDocs().map(d => ({ id: d.id, name: d.name, closed: !!d.closed, pages: d.closed ? d.pageCount : d.pages.length,
+    annotations: (docAnnotations(d).pages || []).flatMap(p => p.items.map(m => ({ page: p.n, ...m }))) })), ...workspaceJson(ws) };
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); a.download = 'workspace.json'; a.click();
 };
 
@@ -1301,7 +2709,10 @@ async function addClipping(sel, x, y) {
   c.getContext('2d').drawImage(p.canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
   const h = headingAt(d, sel.page, sel.bbox.y);
   const blob = await new Promise(res => c.toBlob(res, 'image/png'));     // kept as a Blob: autosaved to IndexedDB and zipped as clips/<id>.png
-  const card = addCard({ type: 'clipping', x, y, blob, text: sel.text, source: { docId: d.id, docName: d.name, hue: d.hue, page: sel.page, bbox: sel.bbox, heading: h ? h.title : null } });
+  const source = { docId: d.id, docName: d.name, hue: d.hue, page: sel.page, bbox: sel.bbox, heading: h ? h.title : null };
+  const textTranslated = clipTranslated({ source }) ?? null;
+  // cut while the document is viewed as Translated → the card opens on the translation (when there is one)
+  const card = addCard({ type: 'clipping', x, y, blob, text: sel.text, source, textTranslated, showTranslated: !!(d.viewTranslated && textTranslated) });
   changed();
   return card;
 }
@@ -1314,16 +2725,18 @@ function addCard(spec, w = ws) {
   el.className = 'card' + (spec.type === 'note' ? ' noteCard' : ''); el.dataset.id = id;
   el.style.left = spec.x + 'px'; el.style.top = spec.y + 'px'; if (spec.w) el.style.width = spec.w + 'px';
   if (spec.source) el.style.setProperty('--dc', `hsl(${spec.source.hue} 60% 42%)`);   // colour-code by source document
-  const srcLabel = spec.source ? `p.${spec.source.page}${spec.source.heading ? ' · ' + spec.source.heading.slice(0, 28) : ''}` : '';
-  const docLabel = spec.source ? shortName(spec.source.docName) : '';
   el.innerHTML = `
-    <div class="hd">${spec.source ? `<span class="src" title="Jump to source in ${escapeHtml(spec.source.docName)}"><b class="dn">${escapeHtml(docLabel)}</b> ↩ ${escapeHtml(srcLabel)}</span>` : `<span class="tag">Note</span>`}<button class="x" title="Delete">×</button></div>
+    <div class="hd">${spec.source ? `<span class="src"></span>` : `<span class="tag">Note</span>`}<button class="x" title="Delete">×</button></div>
     ${spec.blob ? `<img class="crop" draggable="false">` : ''}
-    ${spec.text ? `<div class="txt">${escapeHtml(spec.text)}</div>` : ''}
-    <div class="note" contenteditable="true" data-ph="${spec.type === 'note' ? 'Type a note…' : 'Add a note to this clipping…'}"></div>
+    ${spec.type === 'clipping' ? `<div class="txRow"><button class="txTog" title="Show / hide the extracted text"></button><span class="lang" role="group" aria-label="Text language"><button class="lo" data-l="0">ಕ orig</button><button class="lt" data-l="1"></button></span></div><div class="txt" hidden></div>`
+      : spec.text ? `<div class="txt">${escapeHtml(spec.text)}</div>` : ''}
+    <div class="noteBox"><span class="nl">Note</span><div class="note" contenteditable="true" data-ph="Add a note…"></div></div>
     <div class="rz"></div>`;
   $('.note', el).textContent = spec.note || '';
-  const card = { id, el, type: spec.type, x: spec.x, y: spec.y, w: spec.w || 320, text: spec.text || '', source: spec.source || null, blob: spec.blob || null, imgUrl: null };
+  const card = { id, el, type: spec.type, x: spec.x, y: spec.y, w: spec.w || 320, text: spec.text || '', source: spec.source || null, blob: spec.blob || null, imgUrl: null,
+    textTranslated: spec.textTranslated || null, showTranslated: !!(spec.showTranslated && spec.textTranslated), textOpen: false };   // textOpen: in memory only
+  paintCardBadge(card);
+  if (spec.type === 'clipping') wireCardText(card);
   if (card.blob) {
     const img = $('.crop', el); card.imgUrl = URL.createObjectURL(card.blob); img.src = card.imgUrl;
     img.onload = () => { if (w === ws) drawEdges(); };                 // card height changes once the image is in
@@ -1344,11 +2757,7 @@ function addCard(spec, w = ws) {
   hd.addEventListener('pointerup', () => { if (mv && (card.x !== mv.ox || card.y !== mv.oy)) changed(); mv = null; });
   el.addEventListener('pointerdown', e => { if (wsTool === 'link' && !e.target.closest('.hd')) { linkClick(card); e.preventDefault(); } else if (!e.target.closest('.hd')) selectCard(card); }, true);
   $('.x', el).onclick = () => removeCard(card);
-  $('.src', el)?.addEventListener('click', () => {
-    const d = docById(card.source.docId);
-    if (!d) { setStatus(`${card.source.docName} is closed — reopen it to jump to page ${card.source.page}`); return; }
-    scrollToPos(d, card.source.page, card.source.bbox.y, false, card.source.bbox);
-  });
+  $('.src', el)?.addEventListener('click', () => jumpToSource(card));
   // resize
   const rz = $('.rz', el); let rs = null;
   rz.addEventListener('pointerdown', e => { rs = { sx: e.clientX, ow: el.offsetWidth }; rz.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation(); });
@@ -1357,6 +2766,71 @@ function addCard(spec, w = ws) {
   return card;
 }
 const shortName = n => n.replace(/\.pdf$/i, '').slice(0, 18);
+function paintCardBadge(card) {               // header badge: document · page · heading (re-painted when the document is renamed)
+  const s = $('.src', card.el); if (!s || !card.source) return;
+  const src = card.source, label = `p.${src.page}${src.heading ? ' · ' + src.heading.slice(0, 28) : ''}`;
+  s.title = `Jump to source in ${src.docName} (reopens it if it is closed)`;
+  s.innerHTML = `<b class="dn">${escapeHtml(shortName(src.docName))}</b> ↩ ${escapeHtml(label)}`;
+}
+// badge click: jump to the clipping's spot in its document, reopening a closed document first
+async function jumpToSource(card) {
+  const src = card.source; if (!src) return;
+  const closed = !docById(src.docId) || reopening.has(src.docId);
+  if (closed && closedDocs.some(r => r.id === src.docId)) setStatus(`Reopening ${src.docName}…`);
+  const d = await ensureOpen(src.docId);
+  if (!d) { setStatus(`${src.docName} is no longer in this case`); return; }
+  if (!d.pages[src.page - 1]) { setStatus(`${d.name} has no page ${src.page}`); return; }
+  scrollToPos(d, src.page, src.bbox.y, false, src.bbox);
+}
+// ---- clipping text: "Text ▾" disclosure + ಕ orig | EN pill (round 3 §2)
+const cardShownText = c => (c.showTranslated && c.textTranslated) ? c.textTranslated : c.text;
+function wireCardText(card) {
+  const el = card.el;
+  $('.txTog', el).onclick = () => { card.textOpen = !card.textOpen; renderCardText(card); if (ws.cards.includes(card)) drawEdges(); };
+  $('.lang', el).onclick = e => {
+    const b = e.target.closest('[data-l]'); if (!b) return;
+    const want = b.dataset.l === '1';
+    if (want && !card.textTranslated) { translateCardRegion(card); return; }
+    card.textOpen = true;                                 // picking a language means "show me that text"
+    if (card.showTranslated !== want) { card.showTranslated = want; changed(); refreshMaster(); }
+    renderCardText(card); if (ws.cards.includes(card)) drawEdges();
+  };
+  renderCardText(card);
+}
+function renderCardText(card) {
+  const el = card.el, tx = $('.txt', el); if (!tx || !$('.txRow', el)) return;
+  const tr = !!(card.showTranslated && card.textTranslated), shown = tr ? card.textTranslated : card.text;
+  const d = card.source && docById(card.source.docId);
+  const target = (d?.trans?.target || settings.target || 'en').toUpperCase();
+  $('.txTog', el).innerHTML = `Text ${card.textOpen ? '▴' : '▾'}${shown ? '' : '<span class="cnt">(none)</span>'}`;
+  const lo = $('.lang .lo', el), lt = $('.lang .lt', el);
+  lt.textContent = target;
+  lo.classList.toggle('on', !tr); lt.classList.toggle('on', tr);
+  lo.title = 'Show the original (OCR) text';
+  lt.classList.toggle('dim', !card.textTranslated); lt.classList.toggle('busy', !!card.translating);
+  lt.title = card.translating ? 'Translating…' : card.textTranslated ? `Show the translation (${target})` : 'Translate this region';
+  tx.hidden = !card.textOpen;
+  tx.classList.toggle('empty', !shown);
+  tx.textContent = shown || 'No text was read in this clipping';
+  tx.lang = tr ? target.toLowerCase() : '';
+}
+// the EN segment on a card without a translation: translate its region of the source page (§7.2), then the card picks it up
+async function translateCardRegion(card) {
+  if (card.translating) return;
+  const d = card.source && await ensureOpen(card.source.docId);   // a closed source document is reopened first
+  if (!d) { setStatus(`${card.source?.docName || 'The source document'} is no longer in this case`); return; }
+  if (!apiKey) await loadApiKey();
+  if (!apiKey) { noKeyMessage(); return; }
+  card.translating = true; card.wantTranslated = true; renderCardText(card);
+  try { await translateRegion(d.id, card.source.page, card.source.bbox); }
+  finally {
+    card.translating = false;
+    if (card.textTranslated && card.wantTranslated) { card.showTranslated = true; changed(); refreshMaster(); }
+    card.wantTranslated = false;
+    if (card.textTranslated) card.textOpen = true;
+    renderCardText(card); if (ws.cards.includes(card)) drawEdges();
+  }
+}
 function selectCard(card) { ws.selected = card; $$('.card').forEach(c => c.classList.toggle('selected', card && c === card.el)); }
 function removeCard(card) {
   ws.cards = ws.cards.filter(c => c !== card); ws.edges = ws.edges.filter(e => e.from !== card.id && e.to !== card.id);
@@ -1439,11 +2913,13 @@ divider.addEventListener('pointerup', () => dv = null);
 let caseTitle = 'Untitled case', caseCreatedAt = new Date().toISOString(), caseUpdatedAt = caseCreatedAt;
 let fileName = null, filePath = null, fileDirty = false, changeSeq = 0;
 
+const cardJson = c => ({ id: c.id, type: c.type, x: c.x, y: c.y, w: c.w, text: c.text, note: c.note || '',
+  ...(c.type === 'clipping' ? { textTranslated: c.textTranslated ?? null, showTranslated: !!c.showTranslated } : {}),
+  source: c.source ? { docId: c.source.docId, docName: c.source.docName, hue: c.source.hue, page: c.source.page, bbox: c.source.bbox, heading: c.source.heading ?? null } : null });
 function workspaceJson(w) {
   return {
     id: w.id, title: w.title, createdAt: w.createdAt, view: { x: w.x, y: w.y, z: w.z },
-    cards: w.cards.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, w: c.w, text: c.text, note: c.note || '',
-      source: c.source ? { docId: c.source.docId, docName: c.source.docName, hue: c.source.hue, page: c.source.page, bbox: c.source.bbox, heading: c.source.heading ?? null } : null })),
+    cards: w.cards.map(cardJson),
     edges: w.edges.map(e => ({ id: e.id, from: e.from, to: e.to, label: e.label || '' })),
     strokes: w.strokes.map(s => ({ pts: s.pts, width: s.width })),
   };
@@ -1452,19 +2928,32 @@ function buildCaseJson() {
   return {
     title: caseTitle, createdAt: caseCreatedAt, updatedAt: caseUpdatedAt,
     readerView: view, activeDocumentId: doc?.id ?? null, activeWorkspaceId: ws.id,
-    documents: docs.map(d => ({ id: d.id, name: d.name, hue: d.hue, pageCount: d.pdf?.numPages ?? d.pages.length,
-      pages: d.pages.map(p => ({ n: p.n, w: p.w, h: p.h })), scrollTop: d.scrollTop || 0, scrollLeft: d.scrollLeft || 0 })),
+    documents: allDocs().map(caseDocJson),          // open and closed (round 4: `closed`, default false)
     workspaces: workspaces.map(workspaceJson),
   };
 }
-const ocrOf = d => ({ pages: d.pages.map(p => p.ocrState === 'done' && p.words ? { n: p.n, source: p.source || 'ocr', words: p.words } : null) });
+// `blocks` (optional): the OCR engine's paragraph boxes (Vision / Tesseract), used as translation blocks
+// `engine`/`langs`: what produced the words (§7.1 stale-OCR guard)
+const ocrOf = d => ({ pages: d.pages.map(p => p.ocrState === 'done' && p.words ? { n: p.n, source: p.source || 'ocr', words: p.words, ...(p.ocrBlocks ? { blocks: p.ocrBlocks } : {}),
+  ...(p.source === 'ocr' && p.ocrEngine ? { engine: p.ocrEngine, langs: p.ocrLangs } : {}) } : null) });
 const annotationsOf = d => ({ pages: d.pages.filter(p => p.annos.length).map(p => ({ n: p.n, items: p.annos.map(markOf) })) });
 const snapshot = () => ({
   version: 1, case: buildCaseJson(),
-  ocr: Object.fromEntries(docs.map(d => [d.id, ocrOf(d)])),
-  annotations: Object.fromEntries(docs.map(d => [d.id, annotationsOf(d)])),
+  ocr: Object.fromEntries(allDocs().map(d => [d.id, docOcr(d)])),
+  annotations: Object.fromEntries(allDocs().map(d => [d.id, docAnnotations(d)])),
+  translations: Object.fromEntries(allDocs().map(d => [d.id, docTranslations(d)]).filter(([, t]) => t)),
+  trash: caseTrash.map(trashJson),                  // deleted documents survive a crash until the case is saved to a file
   file: { name: fileName, path: filePath, dirty: fileDirty },
 });
+const trashJson = e => ({ wasClosed: !!e.wasClosed, at: e.at, doc: closedDocJson(e.doc), ocr: e.doc.ocr, annotations: e.doc.annotations, translations: e.doc.translations,
+  cards: e.cards.map(({ wsId, spec }) => ({ wsId, card: spec })), edges: e.edges.map(({ wsId, edge }) => ({ wsId, edge })) });
+function trashFromJson(t, pdfs, clips) {
+  const bytes = t?.doc && pdfs.get(t.doc.id); if (!bytes) return null;
+  const r = makeClosedRecord(t.doc, toArrayBuffer(bytes), t.ocr, t.annotations, t.translations);
+  return { doc: r, wasClosed: !!t.wasClosed, at: t.at || null,
+    cards: (t.cards || []).filter(x => x?.card).map(({ wsId, card }) => ({ wsId, spec: card, blob: clips.get(card.id) || null })),
+    edges: (t.edges || []).filter(x => x?.edge).map(({ wsId, edge }) => ({ wsId, edge })) };
+}
 
 async function exportCaseBytes() {
   if (!window.JSZip) throw new Error('JSZip did not load');
@@ -1472,10 +2961,11 @@ async function exportCaseBytes() {
   const add = (path, data, opts) => zip.file(path, data, { createFolders: false, ...opts });
   add('manifest.json', JSON.stringify({ format: 'lawcase', version: 1, app: 'Case Canvas', title: cj.title, createdAt: cj.createdAt, updatedAt: cj.updatedAt }, null, 2));
   add('case.json', JSON.stringify(cj, null, 2));
-  for (const d of docs) {
+  for (const d of allDocs()) {                      // closed documents too; trashed ones never
     add(`documents/${d.id}.pdf`, d.bytes, { compression: 'STORE' });
-    add(`ocr/${d.id}.json`, JSON.stringify(ocrOf(d)));
-    add(`annotations/${d.id}.json`, JSON.stringify(annotationsOf(d)));
+    add(`ocr/${d.id}.json`, JSON.stringify(docOcr(d)));
+    add(`annotations/${d.id}.json`, JSON.stringify(docAnnotations(d)));
+    const t = docTranslations(d); if (t) add(`translations/${d.id}.json`, JSON.stringify(t));
   }
   for (const w of workspaces) for (const c of w.cards) if (c.blob) add(`clips/${c.id}.png`, c.blob, { compression: 'STORE' });
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
@@ -1489,22 +2979,25 @@ async function readCaseZip(bytes) {
   if (manifest.version > 1) console.warn(`.lawcase version ${manifest.version} is newer than this app (1); reading what it can`);
   const cjText = await read('case.json'); if (!cjText) throw new Error('case.json is missing — not a .lawcase file');
   const cj = JSON.parse(cjText); if (!cj.title && manifest.title) cj.title = manifest.title;
-  const pdfs = new Map(), clips = new Map(), ocr = {}, annotations = {};
+  const pdfs = new Map(), clips = new Map(), ocr = {}, annotations = {}, translations = {};
   for (const sd of cj.documents || []) {
     const b = await read(`documents/${sd.id}.pdf`, 'arraybuffer'); if (b) pdfs.set(sd.id, b);
     const o = await read(`ocr/${sd.id}.json`); if (o) ocr[sd.id] = JSON.parse(o);
     const a = await read(`annotations/${sd.id}.json`); if (a) annotations[sd.id] = JSON.parse(a);
+    const t = await read(`translations/${sd.id}.json`); if (t) translations[sd.id] = JSON.parse(t);
   }
   for (const w of cj.workspaces || []) for (const c of w.cards || []) {
     const b = await read(`clips/${c.id}.png`, 'arraybuffer'); if (b) clips.set(c.id, new Blob([b], { type: 'image/png' }));
   }
-  return { case: cj, pdfs, clips, ocr, annotations };
+  return { case: cj, pdfs, clips, ocr, annotations, translations };
 }
 
 function clearCase() {                          // drops every document and workspace (no save, no UI rebuild)
   hideSelection(); drawing = null; lasso = null;
-  for (const d of docs) { d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove(); d.pdf?.destroy(); }
+  for (const d of docs) { d.pages.forEach(p => observer.unobserve(p.el)); d.pagesEl.remove(); destroyPdf(d.pdf); }
   docs.length = 0; doc = null;
+  closedDocs.length = 0; caseTrash.length = 0; reopening.clear(); caseGen++;   // a new / opened case starts with an empty trash
+  masterOpenClosed.clear(); if (toastUndo) hideToast(); renderTrashMenu();
   for (const w of workspaces) {
     w.cards.forEach(c => { c.el.remove(); c.marker?.remove(); if (c.imgUrl) URL.revokeObjectURL(c.imgUrl); });
     w.strokes.forEach(s => s.el.remove());
@@ -1520,15 +3013,22 @@ async function loadCase(cj, src) {
   restoring = true;
   try {
     clearCase();
-    const ids = [...(cj.documents || []).map(d => d.id), ...(cj.workspaces || []).flatMap(w => [w.id, ...(w.cards || []).map(c => c.id), ...(w.edges || []).map(e => e.id)])].filter(Number.isFinite);
+    // ids of trashed documents / cards / edges (autosave only) are reserved too, so an undo never collides
+    const trashIds = (src.trash || []).flatMap(t => [t?.doc?.id, ...(t?.doc?.manualIndex || []).map(m => m.id), ...(t?.cards || []).map(x => x?.card?.id), ...(t?.edges || []).map(x => x?.edge?.id)]);
+    const ids = [...(cj.documents || []).flatMap(d => [d.id, ...(d.manualIndex || []).map(m => m.id)]), ...(cj.workspaces || []).flatMap(w => [w.id, ...(w.cards || []).map(c => c.id), ...(w.edges || []).map(e => e.id)]), ...trashIds].filter(Number.isFinite);
     nextId = Math.max(0, ...ids) + 1;
     caseTitle = cj.title || 'Untitled case'; caseCreatedAt = cj.createdAt || caseCreatedAt; caseUpdatedAt = cj.updatedAt || caseCreatedAt;
     setView();                                        // always the horizontal board, whatever an older case saved
     for (const sd of cj.documents || []) {
       const bytes = src.pdfs.get(sd.id);
       if (!bytes) { console.warn(`Case document ${sd.name} has no PDF bytes — skipped`); continue; }
+      if (sd.closed) {                                // restored as closed: no pages, no pdf.js — just the record
+        closedDocs.push(makeClosedRecord(sd, toArrayBuffer(bytes), src.ocr?.[sd.id], src.annotations?.[sd.id], src.translations?.[sd.id]));
+        continue;
+      }
       await openPdf({ name: sd.name, bytes: toArrayBuffer(bytes), id: sd.id, hue: sd.hue ?? pickHue(), ocr: src.ocr?.[sd.id], annotations: src.annotations?.[sd.id],
-        scrollTop: sd.scrollTop || 0, scrollLeft: sd.scrollLeft || 0, activate: false });
+        scrollTop: sd.scrollTop || 0, scrollLeft: sd.scrollLeft || 0, activate: false,
+        translations: src.translations?.[sd.id] || null, viewTranslated: sd.viewTranslated ?? !!sd.translateOn, ocrEngine: sd.ocrEngine, ocrLangs: sd.ocrLangs, zoom: sd.zoom ?? 1, manualIndex: sd.manualIndex || [] });
     }
     for (const sw of cj.workspaces || []) {
       const w = makeWorkspace(sw.title || `Workspace ${workspaces.length + 1}`, sw.id ?? uid());
@@ -1536,17 +3036,21 @@ async function loadCase(cj, src) {
       w.x = sw.view?.x ?? 40; w.y = sw.view?.y ?? 40; w.z = sw.view?.z ?? 1;
       workspaces.push(w);
       for (const c of sw.cards || []) {
-        const sd = c.source && docById(c.source.docId);
+        const sd = c.source && anyDocById(c.source.docId);
         const source = c.source ? { ...c.source, docName: sd?.name || c.source.docName || 'document', hue: sd?.hue ?? c.source.hue ?? HUES[0] } : null;
-        addCard({ id: c.id, type: c.type || (source ? 'clipping' : 'note'), x: c.x || 0, y: c.y || 0, w: c.w, text: c.text, note: c.note, source, blob: src.clips?.get(c.id) || null }, w);
+        addCard({ id: c.id, type: c.type || (source ? 'clipping' : 'note'), x: c.x || 0, y: c.y || 0, w: c.w, text: c.text, note: c.note, source, blob: src.clips?.get(c.id) || null,
+          textTranslated: typeof c.textTranslated === 'string' ? c.textTranslated : null, showTranslated: !!c.showTranslated }, w);
       }
       w.edges = (sw.edges || []).map(e => ({ id: e.id ?? uid(), from: e.from, to: e.to, label: e.label || '' }));
       w.strokes = (sw.strokes || []).filter(s => s.pts?.length).map(s => { const st = { pts: s.pts, width: s.width || 2.2 }; st.el = makeStrokeEl(st); return st; });
     }
     if (!workspaces.length) workspaces.push(makeWorkspace('Workspace 1'));
+    for (const t of src.trash || []) { const e = trashFromJson(t, src.pdfs, src.clips || new Map()); if (e) caseTrash.push(e); }
+    renderTrashMenu();
+    docs.forEach(d => refreshClipTrans(d));          // stored textTranslated, refreshed from the live translations of open documents
     switchWorkspace(workspaces.find(w => w.id === cj.activeWorkspaceId) || workspaces[0]);
     const ad = docById(cj.activeDocumentId) || docs[0];
-    if (ad) activateDoc(ad); else { renderTabs(); renderTree(); renderThumbs(); $('#drop').classList.remove('hidden'); }
+    if (ad) activateDoc(ad); else { renderTabs(); renderTree(); renderThumbs(); updateTransUi(); updateZoomUi(); showDrop(); }
   } finally { restoring = false; }
   updateCaseUi();
 }
@@ -1555,8 +3059,8 @@ function newCase() {
   try {
     clearCase();
     const w = makeWorkspace('Workspace 1'); workspaces.push(w); switchWorkspace(w);
-    setView(); renderTabs(); renderTree(); renderThumbs();
-    $('#drop').classList.remove('hidden'); setStatus('No document', 0);
+    setView(); renderTabs(); renderTree(); renderThumbs(); updateTransUi(); updateZoomUi();
+    showDrop(); setStatus('No document', 0);
   } finally { restoring = false; }
   resetStores = true; updateCaseUi();
   return flushSave();
@@ -1578,11 +3082,11 @@ const txDone = tx => new Promise((res, rej) => { tx.oncomplete = () => res(); tx
 
 let saveTimer = null, saving = false, saveQueued = false, saveError = null, resetStores = false;
 // Every state change calls this. soft = view-only (scroll, pan, tab switch): saved, throttled, does not make the file "unsaved".
-function changed(soft = false) {
+function changed(soft = false, delay = 800) {   // delay > 800: an unhurried change (OCR progress) that rides on any save already scheduled
   if (!booted || restoring) return;
   if (!soft) { changeSeq++; caseUpdatedAt = new Date().toISOString(); if (!fileDirty) { fileDirty = true; updateTitle(); } }
-  if (soft && saveTimer) return;
-  clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 800);
+  if (saveTimer && (soft || delay > 800)) return;
+  clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, delay);
   updateSaveInd();
 }
 async function flushSave() {
@@ -1607,8 +3111,9 @@ async function writeAutosave() {
     const r = st.getAllKeys();
     r.onsuccess = () => { const have = new Set(r.result); items.forEach((v, k) => { if (!have.has(k)) st.put(v, k); }); have.forEach(k => { if (!items.has(k)) st.delete(k); }); };
   };
-  sync('pdfs', new Map(docs.map(d => [d.id, d.bytes])));
-  sync('clips', new Map(workspaces.flatMap(w => w.cards.filter(c => c.blob).map(c => [c.id, c.blob]))));
+  sync('pdfs', new Map([...allDocs(), ...caseTrash.map(e => e.doc)].map(d => [d.id, d.bytes])));
+  sync('clips', new Map([...workspaces.flatMap(w => w.cards.filter(c => c.blob).map(c => [c.id, c.blob])),
+    ...caseTrash.flatMap(e => e.cards.filter(x => x.blob).map(x => [x.spec.id, x.blob]))]));
   try { await done; } catch (err) { if (reset) resetStores = true; throw err; }
 }
 async function restoreAutosave() {
@@ -1617,12 +3122,15 @@ async function restoreAutosave() {
   const snap = await reqP(tx.objectStore('meta').get('current'));
   if (!snap?.case) return false;
   const pdfs = new Map(), clips = new Map();
-  const cardIds = (snap.case.workspaces || []).flatMap(w => (w.cards || []).filter(c => c.type === 'clipping').map(c => c.id));
+  const trash = Array.isArray(snap.trash) ? snap.trash : [];
+  const cardIds = [...(snap.case.workspaces || []).flatMap(w => (w.cards || []).filter(c => c.type === 'clipping').map(c => c.id)),
+    ...trash.flatMap(t => (t?.cards || []).filter(x => x?.card?.type === 'clipping').map(x => x.card.id))];
+  const docIds = [...(snap.case.documents || []).map(sd => sd.id), ...trash.map(t => t?.doc?.id).filter(Number.isFinite)];
   await Promise.all([
-    ...(snap.case.documents || []).map(sd => reqP(tx.objectStore('pdfs').get(sd.id)).then(b => b && pdfs.set(sd.id, b))),
+    ...docIds.map(id => reqP(tx.objectStore('pdfs').get(id)).then(b => b && pdfs.set(id, b))),
     ...cardIds.map(id => reqP(tx.objectStore('clips').get(id)).then(b => b && clips.set(id, b))),
   ]);
-  await loadCase(snap.case, { pdfs, clips, ocr: snap.ocr || {}, annotations: snap.annotations || {} });
+  await loadCase(snap.case, { pdfs, clips, ocr: snap.ocr || {}, annotations: snap.annotations || {}, translations: snap.translations || {}, trash });
   fileName = snap.file?.name || null; filePath = snap.file?.path || null; fileDirty = !!snap.file?.dirty;
   return true;
 }
@@ -1659,7 +3167,7 @@ titleEl.addEventListener('change', () => {
   if (v !== caseTitle) { caseTitle = v; changed(); updateTitle(); }
 });
 
-const hasContent = () => docs.length > 0 || workspaces.some(w => w.cards.length || w.strokes.length);
+const hasContent = () => docs.length > 0 || closedDocs.length > 0 || workspaces.some(w => w.cards.length || w.strokes.length);
 const confirmDiscard = () => !fileDirty || !hasContent() || confirm(`“${caseTitle}” has changes that are not saved to a case file. Discard them?`);
 const suggestedName = () => fileName || (caseTitle.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'case') + '.lawcase';
 function downloadBytes(bytes, name, mime = 'application/zip') {
@@ -1680,6 +3188,7 @@ async function saveCase(as = false) {
       downloadBytes(bytes, name); fileName = name;
     }
     fileDirty = changeSeq !== seq;                // edits made while writing keep the file "unsaved"
+    emptyTrash();                                 // round 4 §3: saving to a file ends the undo window for deletes
     updateCaseUi(); flushSave();
     setStatus(`Saved ${fileName}`);
     return true;
@@ -1708,42 +3217,105 @@ async function openCaseFromWebFile(f, confirmed = false) {
 $('#caseFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) openCaseFromWebFile(f, true); });
 const newCaseUI = () => { if (confirmDiscard()) queueCaseOp(newCase); };
 function caseAction(a) {
-  ({ new: newCaseUI, open: openCaseUI, save: () => saveCase(false), saveAs: () => saveCase(true), openPdf: openPdfUI, exportPdf: exportPdfUI })[a]?.();
+  ({ new: newCaseUI, open: openCaseUI, save: () => saveCase(false), saveAs: () => saveCase(true), openPdf: openPdfUI, exportPdf: exportPdfUI,
+    translate: translateWholeUI, translateRegion: () => doc ? selectTool('region') : setStatus('Open a document first'),
+    removePageTrans: () => doc ? removePageTranslations(doc.pages[currentPageNo() - 1]) : setStatus('Open a document first'),
+    toggleView: () => doc ? setViewTranslated(doc, !doc.viewTranslated) : setStatus('Open a document first'),
+    reocr: () => doc ? reOcrDocument(doc) : setStatus('Open a document first'), settings: () => openSettings(),
+    closeDoc: () => doc ? closeDocument(doc) : setStatus('No document is open') })[a]?.();
 }
+const confirmDlg = $('#confirmDlg');
+confirmDlg.addEventListener('keydown', e => e.stopPropagation());
 
 // =====================================================================
 //  EXPORT the active document as a PDF: original pages + mark-up burned in + invisible OCR text (searchable)
 // =====================================================================
 $('#exportPdfBtn').onclick = () => exportPdfUI();
-async function exportPdfUI() {
+// The export dialog (§7.3): which pages and which layers. Choices are remembered for the session.
+const exportDlg = $('#exportDlg');
+let lastExport = null;                           // { pages: 'all'|'current'|'range', range, textLayer, markup?, translation? }
+const hasMarkup = d => d.pages.some(p => p.annos.length);
+// 'all' | 'current' | '1-3,7' | [1, 3] → sorted page numbers (1-based) of document d
+function parsePages(spec, d) {
+  const n = d.pages.length;
+  if (spec == null || spec === 'all') return d.pages.map(p => p.n);
+  if (spec === 'current') return [d === doc ? currentPageNo() || 1 : 1];
+  const out = new Set();
+  const parts = Array.isArray(spec) ? spec.map(String) : String(spec).split(',');
+  for (const raw of parts) {
+    const s = raw.trim(); if (!s) continue;
+    const m = /^(\d+)\s*(?:-\s*(\d+))?$/.exec(s);
+    if (!m) throw new Error(`“${s}” is not a page or range`);
+    const a = +m[1], b = m[2] ? +m[2] : a;
+    if (a < 1 || b < a || b > n) throw new Error(`Pages must be between 1 and ${n} (got “${s}”)`);
+    for (let i = a; i <= b; i++) out.add(i);
+  }
+  if (!out.size) throw new Error('Enter the pages to export, e.g. 1-3,7');
+  return [...out].sort((x, y) => x - y);
+}
+function exportPdfUI() {
   if (!doc) { setStatus('Open a document first'); return; }
-  setStatus(`Exporting ${doc.name}…`);
+  const d = doc, mk = hasMarkup(d), tr = hasTrans(d), L = lastExport || {};
+  const radio = $(`#exportForm input[name=xPages][value="${L.pages || 'all'}"]`); if (radio) radio.checked = true;
+  $('#xRange').value = L.range || ''; $('#xRange').placeholder = `1-${d.pages.length}`;
+  $('#xCurHint').textContent = `(page ${currentPageNo() || 1})`;
+  $('#xText').checked = L.textLayer ?? true;
+  $('#xMarkup').disabled = !mk; $('#xMarkup').checked = mk && (L.markup ?? true); $('#xMarkupL').classList.toggle('off', !mk);
+  $('#xTrans').disabled = !tr; $('#xTrans').checked = tr && (L.translation ?? d.viewTranslated); $('#xTransL').classList.toggle('off', !tr);
+  $('#xTransL').title = tr ? '' : 'This document has no translations';
+  $('#xErr').textContent = '';
+  exportDlg.showModal();
+}
+$('#xRange').addEventListener('focus', () => { $('#exportForm input[value=range]').checked = true; });
+exportDlg.addEventListener('keydown', e => e.stopPropagation());
+$('#exportForm').addEventListener('submit', async e => {
+  if (e.submitter?.value !== 'export') return;   // Cancel closes the dialog
+  e.preventDefault();
+  const d = doc; if (!d) { exportDlg.close(); return; }
+  const mode = $('#exportForm input[name=xPages]:checked')?.value || 'all';
+  const choice = { pages: mode, range: $('#xRange').value.trim(), textLayer: $('#xText').checked };
+  if (!$('#xMarkup').disabled) choice.markup = $('#xMarkup').checked;
+  if (!$('#xTrans').disabled) choice.translation = $('#xTrans').checked;
+  let pages;
+  try { pages = parsePages(mode === 'range' ? choice.range : mode, d); } catch (err) { $('#xErr').textContent = err.message; return; }
+  lastExport = { ...lastExport, ...choice };
+  exportDlg.close();
+  setStatus(`Exporting ${d.name}…`);
   try {
-    const bytes = await exportDocumentPdf(doc);
-    const name = doc.name.replace(/\.pdf$/i, '') + ' (marked up).pdf';
+    const opts = { pages, textLayer: choice.textLayer, markup: !!choice.markup, translation: !!choice.translation };
+    const bytes = await exportDocumentPdf(d, opts);
+    const base = d.name.replace(/\.pdf$/i, ''), tag = [opts.translation && 'translated', opts.markup && 'marked up'].filter(Boolean).join(', ');
+    const range = pages.length === d.pages.length ? '' : ` p${pages.length === 1 ? pages[0] : `${pages[0]}-${pages.at(-1)}`}`;
+    const name = `${base}${range}${tag ? ` (${tag})` : ''}.pdf`;
     if (desktop?.saveFile) { const r = await desktop.saveFile(bytes, name, { name: 'PDF document', extensions: ['pdf'] }); setStatus(r ? `Exported ${r.name}` : 'Export cancelled'); }
     else { downloadBytes(bytes, name, 'application/pdf'); setStatus(`Exported ${name}`); }
   } catch (err) { console.error(err); setStatus('Export failed: ' + err.message); }
-}
+});
 const hexRgb = h => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h || ''); return m ? PDFLib.rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : PDFLib.rgb(0.1, 0.3, 0.65); };
-async function exportDocumentPdf(d) {
+// opts: { pages: 'all'|'current'|'1-3,7'|[n…], textLayer = true, markup = true, translation = d.viewTranslated }
+async function exportDocumentPdf(d, opts = {}) {
+  const { pages: pageSpec = 'all', textLayer = true, markup = true, translation = !!d.viewTranslated } = opts;
+  const keep = new Set(parsePages(pageSpec, d));
   const { PDFDocument, StandardFonts, BlendMode, LineCapStyle, rgb } = PDFLib;
   const pdf = await PDFDocument.load(d.bytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = pdf.getPages();
   for (const p of d.pages) {
-    const page = pages[p.n - 1]; if (!page) continue;
+    const page = pages[p.n - 1]; if (!page || !keep.has(p.n)) continue;
     const { width: W, height: H } = page.getSize();
     const k = W / 1000;                                   // mark-up units → PDF points
     // 1) invisible text layer for scanned pages, so the exported file is searchable and selectable
-    if (p.source === 'ocr' && p.words) for (const w of p.words) {
+    if (textLayer && p.source === 'ocr' && p.words) for (const w of p.words) {
       const text = w.text.replace(/[^\x20-\x7E]/g, '');  // Helvetica's WinAnsi-safe subset
       if (!text) continue;
       const size = Math.max(3, w.h * H * 0.85);
       page.drawText(text, { x: w.x * W, y: H - (w.y + w.h) * H + size * 0.2, size, font, opacity: 0 });
     }
+    // 1b) translation patches (pinned blocks show the original)
+    const tb = translation ? (transOfPage(p)?.blocks || []).filter(b => !b.pinned) : [];
+    if (tb.length) await drawTransPatches(pdf, page, p, tb, font);
     // 2) mark-up
-    for (const a of p.annos) {
+    if (markup) for (const a of p.annos) {
       if ((a.kind === 'pen' || a.kind === 'hl') && a.pts?.length) {
         const path = a.pts.map((q, i) => (i ? 'L' : 'M') + (q[0] * k).toFixed(2) + ' ' + (q[1] * k).toFixed(2)).join(' ') + (a.pts.length === 1 ? ' l0.1 0' : '');
         page.drawSvgPath(path, { x: 0, y: H, borderColor: hexRgb(a.color), borderWidth: (a.width || 3) * k, borderOpacity: a.opacity ?? 1,
@@ -1762,12 +3334,53 @@ async function exportDocumentPdf(d) {
       }
     }
   }
+  for (let i = pages.length - 1; i >= 0; i--) if (!keep.has(i + 1)) pdf.removePage(i);   // only the chosen pages
   pdf.setProducer('Case Canvas — Stuthi Labs Private Limited');
   return await pdf.save();
 }
+// Lens-style patches in the exported PDF: vector rectangles + Helvetica text when the translation is WinAnsi-encodable
+// (Latin targets); otherwise the patch is rendered on a canvas (drawOverlay) and embedded as a PNG over the page.
+async function drawTransPatches(pdf, page, p, blocks, font) {
+  const { rgb } = PDFLib;
+  const { width: W, height: H } = page.getSize();
+  const s = Math.min(2.5, 2600 / Math.max(p.w, p.h));          // render for colour sampling, as lens-pdf exportPdf.ts
+  const vp = p.pdfPage.getViewport({ scale: s });
+  const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  await p.pdfPage.render({ canvasContext: ctx, viewport: vp }).promise;
+  const colors = sampleBlockColors(c, blocks);
+  const latin = t => { try { font.widthOfTextAtSize(t, 10); return true; } catch { return false; } };
+  const PAD = 1.5, MIN = 4.5, img = [], imgColors = [];
+  blocks.forEach((b, i) => {
+    const text = b.translated.replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    if (!latin(text)) { img.push(b); imgColors.push(colors[i]); return; }
+    const bx = b.box.x * W, by = b.box.y * H, bw = b.box.w * W, bh = b.box.h * H, single = b.lineCount === 1;
+    const max = Math.max(MIN, b.fontSize * H * 1.1);
+    const { size, lines } = fitTextToBox(text, bw, bh, single, MIN, max, (t, sz) => font.widthOfTextAtSize(t, sz));
+    const lineH = size * LINE_HEIGHT, textH = lines.length * lineH, patchH = Math.max(bh, textH);
+    const [bg, fg] = [colors[i].bg, colors[i].fg].map(v => rgb(v[0] / 255, v[1] / 255, v[2] / 255));
+    page.drawRectangle({ x: bx - PAD, y: H - by - patchH - PAD, width: bw + PAD * 2, height: patchH + PAD * 2, color: bg });
+    const top = single && textH < bh ? by + (bh - textH) / 2 : by;
+    lines.forEach((ln, j) => page.drawText(ln, { x: bx, y: H - (top + (j + 0.5) * lineH) - size * 0.35, size, font, color: fg }));
+  });
+  if (img.length) {
+    const ov = drawOverlay(c, img, imgColors, s);
+    const blob = await new Promise(r => ov.toBlob(r, 'image/png'));
+    const png = await pdf.embedPng(new Uint8Array(await blob.arrayBuffer()));
+    page.drawImage(png, { x: 0, y: 0, width: W, height: H });
+    ov.width = ov.height = 0;
+  }
+  c.width = c.height = 0;
+  if (!p.live) releasePage(p);
+}
 $('#caseBtn').addEventListener('click', e => { $('#caseMenu').classList.toggle('show'); e.stopPropagation(); });
 document.addEventListener('click', e => { if (!e.target.closest('#caseMenuWrap')) $('#caseMenu').classList.remove('show'); });
-$('#caseMenu').addEventListener('click', e => { const b = e.target.closest('[data-case]'); if (!b) return; $('#caseMenu').classList.remove('show'); caseAction(b.dataset.case); });
+$('#caseMenu').addEventListener('click', e => {
+  const u = e.target.closest('[data-undo]');
+  if (u) { $('#caseMenu').classList.remove('show'); undoDelete(+u.dataset.undo); return; }
+  const b = e.target.closest('[data-case]'); if (!b) return; $('#caseMenu').classList.remove('show'); caseAction(b.dataset.case);
+});
 // Keyboard shortcuts on the web only: on desktop the native menu's accelerators handle them (binding both fires twice).
 if (!desktop) document.addEventListener('keydown', e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
@@ -1780,26 +3393,147 @@ function onDesktopOpenFile(f) {
   queueCaseOp(() => {}).then(() => { if (confirmDiscard()) openCaseBytesUI(f.bytes, f.name, f.path); });
 }
 
+// =====================================================================
+//  SETTINGS (docs/SPEC-translation.md §2) — case-independent
+// =====================================================================
+const dlg = $('#settingsDlg');
+// keyError: why the stored key could not be read / stored; keySessionOnly: the typed key is kept in memory because storing it failed
+let keyError = null, keySessionOnly = false;
+const keyStorage = () => desktop?.getSecret ? 'desktop-safeStorage' : 'localStorage';
+const readStoredKey = async () => desktop?.getSecret ? (await desktop.getSecret('googleApiKey')) || null : localStorage.getItem(WEB_KEY) || null;
+async function loadApiKey() {
+  if (keySessionOnly && apiKey) return;          // the stored copy is broken: keep the key typed this session
+  try { apiKey = await readStoredKey(); keyError = null; }
+  catch (err) {
+    console.error('Could not read the API key', err); apiKey = null;
+    keyError = String(err?.message || err);
+    banner(`Could not read the saved Google API key (${keyError}). Paste the key again in Settings.`, 'err', 'settings');
+  }
+}
+function keySaveMsg(text, ok) { const el = $('#keySaveRes'); el.textContent = text; el.className = text ? (ok ? 'ok' : 'bad') : ''; }
+async function setApiKey(v) {
+  v = (v || '').trim() || null;
+  if (v === apiKey && !keySessionOnly) return;
+  // store, then read back: the key only counts as saved when it round-trips
+  let stored, err = null;
+  try {
+    if (desktop?.setSecret) await desktop.setSecret('googleApiKey', v);
+    else v ? localStorage.setItem(WEB_KEY, v) : localStorage.removeItem(WEB_KEY);
+    stored = await readStoredKey();
+  } catch (e) { console.error('Could not store the API key', e); err = String(e?.message || e); }
+  apiKey = v;
+  if (!err && stored === v) { keySessionOnly = false; keyError = null; keySaveMsg(v ? 'Saved and verified' : 'Key removed', true); }
+  else {
+    keySessionOnly = !!v; keyError = err || 'the stored key did not read back unchanged';
+    const msg = 'Could not store the key securely — it will be kept for this session only; please report this';
+    keySaveMsg(msg, false); banner(`${msg} (${keyError})`, 'err', 'settings');
+  }
+  for (const d of docs) for (const p of d.pages) p.transErr = null;   // errors may have been "no key" / "bad key"
+  retryBlockedOcr(); runTransQueue();
+}
+function applySettings(partial) {
+  const before = { ...settings };
+  for (const k of Object.keys(DEFAULT_SETTINGS)) if (k in partial && partial[k] != null) settings[k] = String(partial[k]);
+  if (!['local', 'vision'].includes(settings.ocrEngine)) settings.ocrEngine = 'local';
+  if (!['eng', 'kan', 'kan+eng'].includes(settings.ocrLangs)) settings.ocrLangs = 'eng';
+  if (!['translated', 'original'].includes(settings.transView)) settings.transView = 'translated';
+  if (!['free', 'box'].includes(settings.lassoShape)) settings.lassoShape = 'free';
+  if (tool === 'lasso') renderToolPop();
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+  const ocrChanged = before.ocrEngine !== settings.ocrEngine || before.ocrLangs !== settings.ocrLangs;
+  if (ocrChanged) retryBlockedOcr();
+  if (before.target !== settings.target || before.source !== settings.source) retranslateIfStale();
+  return ocrChanged;
+}
+const settingsState = () => ({ ...settings, hasKey: !!apiKey, keyStorage: keyStorage() });
+const keyStatus = () => ({ hasKey: !!apiKey, storage: keyStorage(), sessionOnly: keySessionOnly, lastError: keyError });
+function openSettings() {
+  $('#setKey').value = apiKey || ''; $('#setKey').type = 'password'; $('#showKey').textContent = 'Show';
+  $('#setEngine').value = settings.ocrEngine; $('#setLangs').value = settings.ocrLangs;
+  $('#setTarget').value = settings.target; $('#setSource').value = settings.source; $('#setTransView').value = settings.transView; $('#setLasso').value = settings.lassoShape;
+  $('#testKeyRes').textContent = ''; $('#testKeyRes').className = '';
+  keySaveMsg(keyError ? (keySessionOnly ? 'Key kept for this session only — it could not be stored securely' : `The saved key could not be read (${keyError}) — paste it again`) : '', false);
+  $('#keyHint').textContent = desktop?.getSecret ? 'Encrypted by the operating system on this computer. Never written into a .lawcase.'
+    : 'Stored in this browser (localStorage), in plain text. Never written into a .lawcase.';
+  $('#reocrBanner').hidden = true; updateReocrHint();
+  if (!dlg.open) dlg.showModal();
+}
+function updateReocrHint() {
+  $('#reocrBtn').disabled = !doc;
+  $('#reocrHint').textContent = doc ? `${doc.name}${doc.ocrEngine ? ` — read with ${doc.ocrEngine === 'vision' ? 'Vision' : 'Tesseract'} (${doc.ocrLangs})` : ''}` : 'No document open';
+}
+$('#settingsBtn').onclick = () => openSettings();
+$('#setKey').addEventListener('change', e => setApiKey(e.target.value));
+$('#showKey').onclick = () => { const k = $('#setKey'); k.type = k.type === 'password' ? 'text' : 'password'; $('#showKey').textContent = k.type === 'password' ? 'Show' : 'Hide'; };
+for (const [sel, key] of [['#setEngine', 'ocrEngine'], ['#setLangs', 'ocrLangs'], ['#setTarget', 'target'], ['#setSource', 'source'], ['#setTransView', 'transView'], ['#setLasso', 'lassoShape']])
+  $(sel).addEventListener('change', e => { if (applySettings({ [key]: e.target.value }) && doc?.pages.some(p => p.words)) $('#reocrBanner').hidden = false; });
+$('#reocrBtn').onclick = () => { if (!doc) return; reOcrDocument(doc); $('#reocrBanner').hidden = true; updateReocrHint(); };
+$('#testKey').onclick = async () => {
+  const res = $('#testKeyRes'), key = $('#setKey').value.trim();
+  if (!key) { res.textContent = 'Enter a key first'; res.className = 'bad'; return; }
+  res.textContent = 'Testing…'; res.className = '';
+  try {
+    const [t] = await translateBatch(['ಪರೀಕ್ಷೆ'], '', settings.target, key);
+    res.textContent = `Works — “ಪರೀಕ್ಷೆ” → “${t.text}”${t.detectedLang ? ` (detected ${t.detectedLang})` : ''}`; res.className = 'ok';
+    await setApiKey(key);
+  } catch (err) { res.textContent = `Failed: ${err.message}`; res.className = 'bad'; }
+};
+dlg.addEventListener('close', () => { const v = $('#setKey').value; if ((v.trim() || null) !== apiKey) setApiKey(v); });
+dlg.addEventListener('keydown', e => e.stopPropagation());   // typing in the dialog never reaches the workspace shortcuts
+
 // For the desktop shell and tests.
 function caseState() {
   return {
     booted, title: caseTitle, readerView: view, fileName, filePath, dirty: fileDirty,
     saving: !!(saveTimer || saving), saveError: saveError ? String(saveError.message || saveError) : null,
     activeDocumentId: doc?.id ?? null, activeWorkspaceId: ws.id,
-    documents: docs.map(d => ({ id: d.id, name: d.name, pages: d.pages.length, ocrDone: d.pages.filter(p => p.ocrState === 'done').length, headings: d.index.length, marks: d.pages.reduce((s, p) => s + p.annos.length, 0), scrollTop: d.scrollTop || 0 })),
+    documents: allDocs().map(d => d.closed
+      ? { id: d.id, name: d.name, closed: true, pages: d.pageCount, ocrDone: (d.ocr?.pages || []).filter(Boolean).length, headings: d.index.length, marks: markCount(d.annotations), scrollTop: d.json.scrollTop || 0, scrollLeft: d.json.scrollLeft || 0, zoom: d.json.zoom || 1 }
+      : { id: d.id, name: d.name, closed: false, pages: d.pages.length, ocrDone: d.pages.filter(p => p.ocrState === 'done').length, headings: d.index.length, marks: d.pages.reduce((s, p) => s + p.annos.length, 0), scrollTop: d.scrollTop || 0, scrollLeft: d.scrollLeft || 0, zoom: d.zoom || 1 }),
+    trash: caseTrash.map(e => ({ id: e.doc.id, name: e.doc.name, cards: e.cards.length })),
     workspaces: workspaces.map(w => ({ id: w.id, title: w.title, cards: w.cards.length, clippings: w.cards.filter(c => c.type === 'clipping').length, edges: w.edges.length, strokes: w.strokes.length, view: { x: w.x, y: w.y, z: w.z } })),
   };
 }
 window.caseApp = {
-  exportDocumentPdf: () => exportDocumentPdf(doc),
+  exportDocumentPdf: (id, opts) => exportDocumentPdf((id != null ? docById(id) : null) || doc, opts),
   exportCaseBytes, importCaseBytes, newCase: () => queueCaseOp(newCase), state: caseState,
   save: () => saveCase(false), saveAs: () => saveCase(true), flush: flushSave, ready: () => caseOp, caseJson: buildCaseJson,
+  // Lens layer (docs/SPEC-translation.md). setSettings accepts { apiKey } too (null clears it).
+  settings: settingsState, keyStatus,
+  setSettings: async (partial = {}) => { const { apiKey: k, ...rest } = partial; if ('apiKey' in partial) await setApiKey(k); applySettings(rest); return settingsState(); },
+  // §7.4: translateRegion(docId, page, box) with box in page fractions; setViewTranslated(on, docId?); translateDocument = whole-document action
+  translateDocument: id => translateWhole((id != null ? docById(id) : null) || doc), translationState,
+  translateRegion: (id, page, box) => translateRegion(id, page, box),
+  setViewTranslated: (on, id) => { const d = (id != null ? docById(id) : null) || doc; setViewTranslated(d, on); return translationState(d?.id); },
+  // previous version's toggle: on = show translations and translate the document (as before); off = show the original
+  setTranslate: (on, id) => { const d = (id != null ? docById(id) : null) || doc; if (!d) return null; setViewTranslated(d, on); if (on) translateWhole(d); return translationState(d.id); },
+  reOcrDocument: id => reOcrDocument((id != null ? docById(id) : null) || doc),
+  // round 3 §4: zoom of a document (0.5–3; default the active one) and a clipping card's text state
+  setZoom: (z, id) => setZoom((id != null ? docById(id) : null) || doc, z),
+  // round 3 §5: manual index entries; indexEntries = the merged list (detected + manual) with `kind`
+  addIndexEntry: (id, e = {}) => addIndexEntry((id != null ? docById(id) : null) || doc, e),
+  indexEntries: id => { const d = (id != null ? docById(id) : null) || doc; return d ? d.index.map(h => ({ title: h.title, page: h.page, y: h.y, level: h.level, kind: h.kind, ...(h.kind === 'manual' ? { id: h.id } : {}) })) : null; },
+  cardState: id => { const c = workspaces.flatMap(w => w.cards).find(c => c.id === id); return c ? { text: c.text, textTranslated: c.textTranslated ?? null, showTranslated: !!c.showTranslated } : null; },
+  // round 4: close keeps the document in the case; delete moves it (and its cards / edges) to the trash until the next file save
+  closeDocument: id => !!closeDocument(docById(id ?? doc?.id)),
+  reopenDocument: async id => { const d = await ensureOpen(id); return d ? d.id : null; },
+  deleteDocument: id => { const e = deleteDocument(anyDocById(id)); return e ? { id: e.doc.id, name: e.doc.name, cards: e.cards.length, edges: e.edges.length } : null; },
+  undoDelete: async id => { const r = await undoDelete(id ?? undefined); return r ? r.id : null; },
+  trash: () => caseTrash.map(e => ({ id: e.doc.id, name: e.doc.name, cards: e.cards.length })),
+  renameDocument: (id, name) => renameDocument(anyDocById(id), name),
+  // round 5: open a PDF from bytes; which pages are live (page window); drive the find box
+  openPdf: (name, bytes) => openPdf({ name, bytes: toArrayBuffer(bytes) }).then(d => d ? d.id : null),
+  pageStats: id => { const d = (id != null ? docById(id) : null) || doc; return d ? d.pages.map(p => ({ n: p.n, live: !!p.live, rendered: !!p.rendered, spans: p.textLayer.childElementCount, patches: p.transEl.childElementCount, ocr: p.ocrState, thumb: !!p.thumb })) : null; },
+  find: (q, dir = 1) => { searchInp.value = q ?? ''; openFind(); runFind(dir); return { open: findOpen(), hits: findHits.length, at: findAt, count: findCountEl.textContent }; },
+  closeFind,
 };
 
 // ---- boot: show the default workspace, then silently restore the autosaved case
-switchWorkspace(ws); renderTree(); updateCaseUi();
+switchWorkspace(ws); renderTree(); updateCaseUi(); updateTransUi(); updateZoomUi();
 queueCaseOp(async () => {
-  try { await restoreAutosave(); } catch (err) { console.error('Restore failed', err); }
+  await loadApiKey();
+  try { await restoreAutosave(); }
+  catch (err) { console.error('Restore failed', err); setStatus('The autosaved case could not be restored (' + (err?.name || 'error') + '). Open your .lawcase file to continue.'); toast('Autosave could not be restored — open your saved .lawcase file'); }
   booted = true; updateCaseUi();
 });
 </script>

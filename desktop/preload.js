@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('desktop', {
   // generic "save a file" (used for PDF export): filter = { name, extensions: ['pdf'] }
   saveFile: (bytes, suggestedName, filter) => ipcRenderer.invoke('desktop:saveFile', bytes, suggestedName, filter),
   setTitle: (title) => ipcRenderer.send('desktop:setTitle', String(title)),
+  // secrets such as the Google Cloud API key, encrypted with the OS (safeStorage)
+  getSecret: (name) => ipcRenderer.invoke('desktop:getSecret', name),
+  setSecret: (name, value) => ipcRenderer.invoke('desktop:setSecret', name, value),
   onMenu: (cb) => { ipcRenderer.on('menu', (_e, action) => cb(action)); },
   onOpenFile: (cb) => { ipcRenderer.on('open-file', (_e, file) => cb(file)); }
 });

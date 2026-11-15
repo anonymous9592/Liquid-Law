@@ -82,6 +82,20 @@ PDF uploaded
 
 ---
 
+### 4a. Kannada, mixed-language pages and translation
+
+- **Local OCR** uses Tesseract `kan+eng`. Measured on a clean synthetic Kannada scan: mean word
+  confidence 88, about 6 s per page, with one systematic error (anusvara read as the digit ೦)
+  that is post-corrected. Expect noticeably lower accuracy on real court photocopies.
+- **Cloud OCR** (Google Cloud Vision, `DOCUMENT_TEXT_DETECTION` with `kn`/`en` hints) is the
+  recommended engine for Kannada scans; it also returns paragraph blocks that drive translation.
+- **Translation** is Google Cloud Translation v2 only. There is no reliable offline Kannada→English
+  model that runs in a browser or on a tablet, so translation always needs the firm's Google key.
+- The **Lens layer** (ported from the author's `lens-pdf` app): translated paragraphs are drawn as
+  patches over the original text with colours sampled from the page, fitted font size, hold-to-peek,
+  edit and pin. Translations are cached in the case so a saved case never re-calls Google.
+  Details in [docs/SPEC-translation.md](docs/SPEC-translation.md).
+
 ## 5. Auto-indexing (Prayer, Pleadings A/B/C, nested to any depth)
 
 Headings are detected from the OCR words using layout + text rules, then nested into a tree.

@@ -1,7 +1,7 @@
 {
   "name": "casecanvas-desktop",
   "productName": "Case Canvas",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Case Canvas desktop shell",
   "main": "main.js",
   "author": "Stuthi Labs Private Limited",

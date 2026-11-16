@@ -22,7 +22,7 @@ source location.**
 |---------------|----------------------------------|-----|
 | Web           | PWA (installable)                | Zero install, works today |
 | iPad          | Capacitor (WKWebView) → App Store | Native Apple Pencil pressure/tilt via PointerEvents; file picker; iCloud |
-| Android tab   | Capacitor (WebView) → Play Store  | Same code, stylus via PointerEvents |
+| Android tab   | **Capacitor** (built in `mobile/`, Android 15+) | Same renderer; files through the Storage Access Framework; stylus/finger via PointerEvents with per-tool touch mapping (docs/SPEC-round6.md) |
 | macOS         | Electron now, Tauri 2 later      | Same shell as Windows |
 | Windows       | **Electron** (built in `desktop/`) | Chosen for Phase 0/1 because it needs only Node; Tauri 2 would give a smaller binary but needs the Rust + MSVC toolchain. The renderer is identical, so the swap is contained to the shell |
 

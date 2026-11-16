@@ -5,9 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Case Canvas — prototype</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml" />
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- libraries are vendored (prototype/vendor) so the app starts without the CDN; OCR language data still downloads once -->
+<script src="vendor/tesseract.min.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="android.js"></script>
 <style>
   :root {
     --bg: #f3f1ec; --panel: #ffffff; --ink: #1f1d1a; --muted: #7a7570; --line: #e2ded6;
@@ -137,13 +139,20 @@
   .tab .cl { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
   .tab .cl:hover { color: var(--accent); }
   #readerWrap { position: relative; }
-  #reader { flex: 1; overflow: auto; position: relative; background: #e9e6df; touch-action: pan-y pinch-zoom; }
+  #reader { flex: 1; overflow: auto; position: relative; background: #e9e6df; touch-action: pan-x pan-y; }
   #reader.tool-lasso, #reader.tool-select, #reader.tool-pen, #reader.tool-hl, #reader.tool-erase { touch-action: none; }
   .pages { padding: 20px 0 80px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
   .page { position: relative; background: #fff; box-shadow: var(--shadow); }
 
   /* ---------- board view: horizontal, overlapping pages on a whiteboard ---------- */
-  #reader.board { touch-action: pan-x pan-y; background: #fbfbf9;   /* two-finger pinch zooms the pages (round 3 §1), not the window */
+  /* touch mapping (round 6): Hand = one finger pans, two fingers pinch; any other tool owns the finger entirely —
+     no panning, no native text selection, no long-press callout — like a pencil app on an iPad */
+  #reader { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #reader.tool-select .textLayer { -webkit-user-select: text; user-select: text; }
+  #reader .sticky .sb, #reader .trans .block.editing, #reader input, #reader textarea, #reader [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+  #reader.board.tool-lasso, #reader.board.tool-select, #reader.board.tool-pen, #reader.board.tool-hl, #reader.board.tool-erase, #reader.board.tool-note, #reader.board.tool-region { touch-action: none; }
+  #selBox, #selChip, .sticky .sh, .lasso, .region { touch-action: none; }
+  #reader.board { background: #fbfbf9;   /* two-finger pinch zooms the pages (round 3 §1), not the window */
     background-image: linear-gradient(rgba(40,40,60,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(40,40,60,.045) 1px, transparent 1px);
     background-size: 40px 40px; box-shadow: inset 0 0 120px rgba(0,0,0,.06); }
   /* min-height (not height): a zoomed page taller than the pane grows the strip, so its top is never cut off above scrollTop 0 */
@@ -577,18 +586,16 @@
 </dialog>
 
 <script type="module">
-import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
+import * as pdfjsLib from './vendor/pdf.min.mjs';
 import { isUnreadableText, fixKannadaZero, layoutBlocks, fitFontSize, sampleBlockColors, fitTextToBox, LINE_HEIGHT, drawOverlay,
   visionOcr, translateBlocks, translateBatch, GoogleError } from './lens.js';
 
-// ---- pdf.js worker (cross-origin safe via blob import) ----
-{
-  const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  const blob = new Blob([`import "${workerUrl}";`], { type: 'text/javascript' });
-  pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(blob), { type: 'module' });
-}
+// ---- pdf.js worker (vendored, same origin) ----
+pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(new URL('./vendor/pdf.worker.min.mjs', import.meta.url), { type: 'module' });
+// Tesseract.js worker + WASM core, vendored too (absolute URLs: the worker is created from a blob, so relative paths would not resolve)
+const TESS_PATHS = { workerPath: new URL('./vendor/tesseract-worker.min.js', import.meta.url).href, corePath: new URL('./vendor/core', import.meta.url).href };
 
-const APP_VERSION = '0.5.0';           // keep in sync with desktop/package.json
+const APP_VERSION = '0.6.0';           // keep in sync with desktop/package.json
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const reader = $('#reader');
@@ -882,7 +889,10 @@ reader.addEventListener('pointermove', e => {
   rPinch.raf = requestAnimationFrame(() => {
     if (!rPinch) return; rPinch.raf = 0;
     const [a, b] = [...rTouches.values()]; if (!b) return;
-    setZoom(doc, rPinch.z0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / rPinch.d0, { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 });
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    setZoom(doc, rPinch.z0 * Math.hypot(a[0] - b[0], a[1] - b[1]) / rPinch.d0, { x: mx, y: my });
+    if (rPinch.mid) { reader.scrollLeft -= mx - rPinch.mid[0]; reader.scrollTop -= my - rPinch.mid[1]; }   // two fingers also pan, whatever the tool
+    rPinch.mid = [mx, my];
   });
 }, true);
 const endRTouch = e => { rTouches.delete(e.pointerId); if (rTouches.size < 2 && rPinch) { cancelAnimationFrame(rPinch.raf); rPinch = null; } };
@@ -891,7 +901,21 @@ function cancelPointerTools() {
   if (lasso) { lasso.path.remove(); lasso = null; }
   if (drawing) { if (!drawing.erase) drawing.path.remove(); drawing = null; }
   if (regionDrag) { regionDrag.rect.remove(); regionDrag = null; }
+  if (tsel) { $$('span.inlasso', tsel.p.textLayer).forEach(s => s.classList.remove('inlasso')); tsel = null; }
 }
+// Touch mapping (round 6). With any tool but Hand, a finger or stylus on a page belongs to the tool: the browser must
+// not start a native text selection, a long-press callout or a scroll from it. preventDefault on the pointerdown does
+// exactly that (editable things — sticky notes, patch editing — keep their default so they can be focused).
+let lastPointerType = 'mouse';
+reader.addEventListener('pointerdown', e => {
+  lastPointerType = e.pointerType || 'mouse';
+  if (e.pointerType === 'mouse' || tool === 'hand') return;
+  if (!e.target.closest('.page') || e.target.closest('.sticky, .block.editing, input, textarea, [contenteditable="true"]')) return;
+  e.preventDefault();
+}, true);
+reader.addEventListener('contextmenu', e => {   // long-press on a tool is not a request for a menu
+  if (lastPointerType !== 'mouse' && tool !== 'hand' && e.target.closest('.page') && !e.target.closest('.sticky, .block')) e.preventDefault();
+}, true);
 
 // ---- filmstrip of page previews along the bottom
 const strip = $('#strip'), thumbsEl = $('#thumbs');
@@ -1257,7 +1281,7 @@ async function getWorker(langs) {
   if (tess && tessLangs === langs) return tess;
   if (tess) { const old = tess; tess = null; tessLangs = null; old.terminate().catch(() => {}); }
   setStatus(`Loading OCR engine (${langs}${langs.includes('kan') ? ' — the Kannada model is a large first download' : ''})…`);
-  const w = await Tesseract.createWorker(langs, 1, { logger: m => { if (m.status === 'recognizing text' && currentOcr) currentOcr.tag.textContent = `OCR ${Math.round(m.progress * 100)}%`; } });
+  const w = await Tesseract.createWorker(langs, 1, { ...TESS_PATHS, logger: m => { if (m.status === 'recognizing text' && currentOcr) currentOcr.tag.textContent = `OCR ${Math.round(m.progress * 100)}%`; } });
   tess = w; tessLangs = langs;
   return w;
 }
@@ -2405,6 +2429,49 @@ document.addEventListener('selectionchange', () => {
   setSelection({ doc: p.doc, page: p.n, bbox: { x: (x0 - pr.left) / pr.width, y: (y0 - pr.top) / pr.height, w: (x1 - x0) / pr.width, h: (y1 - y0) / pr.height }, rects: norm, text: sel.toString().replace(/\s+/g, ' ').trim() });
 });
 
+// ---- finger / stylus text selection (round 6): native drag-selection only exists for the mouse, so with the Text tool
+// a touch drag selects the OCR words between the first and the last touched word in reading order, iPad-style.
+let tsel = null;
+const wordOrder = p => p.lines.flatMap(l => l.words);
+function nearestWordIdx(order, x, y) {
+  let best = -1, bestD = Infinity;
+  order.forEach((w, i) => { const dx = x < w.x ? w.x - x : x > w.x + w.w ? x - w.x - w.w : 0, dy = y < w.y ? w.y - y : y > w.y + w.h ? y - w.y - w.h : 0; const d = dy * 4 + dx; if (d < bestD) { bestD = d; best = i; } });
+  return best;
+}
+function touchSelRange(ts, e) {
+  const { pr, order } = ts, x = (e.clientX - pr.left) / pr.width, y = (e.clientY - pr.top) / pr.height;
+  const b = nearestWordIdx(order, x, y); if (b < 0) return null;
+  const lo = Math.min(ts.a, b), hi = Math.max(ts.a, b);
+  return { lo, hi, words: order.slice(lo, hi + 1) };
+}
+reader.addEventListener('pointerdown', e => {
+  if (tool !== 'select' || e.pointerType === 'mouse') return;
+  const pageEl = e.target.closest('.page'); if (!pageEl) return;
+  const p = pageOf(pageEl); if (!p || !p.words) return;
+  const pr = pageEl.getBoundingClientRect(), order = wordOrder(p);
+  const a = nearestWordIdx(order, (e.clientX - pr.left) / pr.width, (e.clientY - pr.top) / pr.height); if (a < 0) return;
+  hideSelection(); window.getSelection()?.removeAllRanges();
+  tsel = { p, pr, order, a, moved: false };
+  p.ovl.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+reader.addEventListener('pointermove', e => {
+  if (!tsel) return;
+  const r = touchSelRange(tsel, e); if (!r) return;
+  tsel.moved = true;
+  $$('span', tsel.p.textLayer).forEach(s => s.classList.toggle('inlasso', tsel.p.words[+s.dataset.i] && r.words.includes(tsel.p.words[+s.dataset.i])));
+});
+reader.addEventListener('pointerup', e => {
+  if (!tsel) return;
+  const ts = tsel; tsel = null;
+  $$('span.inlasso', ts.p.textLayer).forEach(s => s.classList.remove('inlasso'));
+  const r = touchSelRange(ts, e); if (!r || (!ts.moved && r.words.length < 1)) return;
+  const words = r.words, lines = groupLines(words);
+  const rects = lines.map(l => ({ x: l.x0, y: l.y, w: l.x1 - l.x0, h: l.h }));
+  const x0 = Math.min(...words.map(w => w.x)), y0 = Math.min(...words.map(w => w.y)), x1 = Math.max(...words.map(w => w.x + w.w)), y1 = Math.max(...words.map(w => w.y + w.h));
+  setSelection({ doc: ts.p.doc, page: ts.p.n, bbox: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, rects, text: lines.map(l => l.text).join('\n') });
+});
+
 // ---- lasso
 let lasso = null;
 reader.addEventListener('pointerdown', e => {
@@ -2655,9 +2722,13 @@ wsEl.addEventListener('wheel', e => {
 let pan = null, pinch = null; const touches = new Map();
 wsEl.addEventListener('pointerdown', e => {
   if (e.target.closest('.card')) return;
-  if (wsTool === 'pen' && e.pointerType !== 'touch') return;      // ink handled below (pen/mouse); fingers pan
-  touches.set(e.pointerId, [e.clientX, e.clientY]);
-  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: ws.z }; pan = null; return; }
+  if (e.pointerType === 'touch') touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (wsTool === 'pen') {                                           // Pen mode: one finger / stylus inks (below); two fingers pinch + pan
+    if (e.pointerType !== 'touch') return;
+    if (touches.size === 2) { cancelStroke(); const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: ws.z, mid: null }; pan = null; }
+    return;
+  }
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: ws.z, mid: null }; pan = null; return; }
   pan = { sx: e.clientX, sy: e.clientY, ox: ws.x, oy: ws.y }; wsEl.setPointerCapture(e.pointerId);
   if (wsTool === 'link') { ws.linkSrc = null; $$('.card').forEach(c => c.classList.remove('linkSrc')); }
   selectCard(null);
@@ -2668,7 +2739,10 @@ wsEl.addEventListener('pointermove', e => {
     const [a, b] = [...touches.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
     const z = Math.min(3, Math.max(0.25, pinch.z * d / pinch.d)); const r = wsEl.getBoundingClientRect();
     const mx = (a[0] + b[0]) / 2 - r.left, my = (a[1] + b[1]) / 2 - r.top;
-    const [cx, cy] = [(mx - ws.x) / ws.z, (my - ws.y) / ws.z]; ws.x = mx - cx * z; ws.y = my - cy * z; ws.z = z; applyView(); return;
+    const [cx, cy] = [(mx - ws.x) / ws.z, (my - ws.y) / ws.z]; ws.x = mx - cx * z; ws.y = my - cy * z; ws.z = z;
+    if (pinch.mid) { ws.x += mx - pinch.mid[0]; ws.y += my - pinch.mid[1]; }   // two fingers pan as well as zoom
+    pinch.mid = [mx, my];
+    applyView(); return;
   }
   if (!pan) return;
   ws.x = pan.ox + e.clientX - pan.sx; ws.y = pan.oy + e.clientY - pan.sy; applyView();
@@ -2679,14 +2753,16 @@ wsEl.addEventListener('pointerup', endPan); wsEl.addEventListener('pointercancel
 // ink (pen / mouse in Pen mode)
 let stroke = null;
 inkSvg.addEventListener('pointerdown', e => {
-  if (wsTool !== 'pen' || e.pointerType === 'touch') return;
+  if (wsTool !== 'pen') return;
+  if (e.pointerType === 'touch' && (touches.size > 0 || pinch)) return;   // a second finger is a pinch, not a stroke
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   inkG.appendChild(path); inkSvg.setPointerCapture(e.pointerId);
-  stroke = { pts: [], el: path, width: 2.2 };
+  stroke = { pts: [], el: path, width: 2.2, pointerId: e.pointerId };
   addInkPoint(e); e.preventDefault();
 });
-inkSvg.addEventListener('pointermove', e => { if (stroke) { addInkPoint(e); } });
-const endStroke = () => { if (stroke) { ws.strokes.push(stroke); stroke = null; changed(); } };
+inkSvg.addEventListener('pointermove', e => { if (stroke && e.pointerId === stroke.pointerId) { addInkPoint(e); } });
+const endStroke = e => { if (stroke && (!e || e.pointerId === stroke.pointerId)) { if (stroke.pts.length > 1) ws.strokes.push(stroke); else stroke.el.remove(); stroke = null; changed(); } };
+const cancelStroke = () => { if (stroke) { stroke.el.remove(); stroke = null; } };
 inkSvg.addEventListener('pointerup', endStroke); inkSvg.addEventListener('pointercancel', endStroke);
 function addInkPoint(e) {
   const [x, y] = toCanvas(e.clientX, e.clientY);

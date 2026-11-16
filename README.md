@@ -14,6 +14,8 @@ and a side-by-side workspace where lassoed regions become linked, annotatable ca
 | [docs/SPEC-round5.md](docs/SPEC-round5.md) | Page window for large PDFs (what is kept in memory and when) and the find box |
 | [docs/SPEC-case-file.md](docs/SPEC-case-file.md) | The `.lawcase` file format, autosave rules, multi-workspace and master-index behaviour, and the renderer ↔ desktop bridge |
 | [desktop/](desktop/README.md) | The Windows app (Electron shell around the same renderer): `npm start` to run, `npm run build:win` to build the installer and portable exe into `desktop/dist/` |
+| [mobile/](mobile/README.md) | The Android tablet app (Capacitor shell around the same renderer, Android 15+): `gradlew assembleRelease` builds the APK into `mobile/android/app/build/outputs/apk/` |
+| [docs/SPEC-round6.md](docs/SPEC-round6.md) | The Android shell's file bridge and the touch mapping (what a finger, a stylus and two fingers do with each tool) |
 
 ## Run the prototype
 
@@ -86,6 +88,11 @@ Nothing leaves the browser: PDF.js renders, Tesseract.js OCRs in a Web Worker.
   its OCR, mark-up, translations and clippings, listed under *Closed documents* in the master index
   with a Reopen link (a clipping's badge reopens it too). Right-click a document there → *Delete from
   case…* asks for confirmation; *Undo* is offered until the case is next saved.
+- **Touch, iPad-style.** With any tool but Hand, a finger or stylus belongs to the tool: lasso, pen, highlighter and
+  region drags never select text, pan the page or pop a long-press menu; the Text tool selects OCR words by dragging a
+  finger across them; two fingers always pinch-zoom and pan. In the workspace, Pen mode inks with a finger too.
+- **Android tablets.** The same renderer ships as an Android 15+ APK (`mobile/`), with the system file picker and
+  "save as" dialogs, and `.lawcase` files opening from Files or Drive.
 - **Stateful.** Everything autosaves to the browser's IndexedDB within a second of a
   change and is restored on the next launch, including OCR results (no re-OCR), mark-up,
   workspaces, cards, links, ink, view mode and scroll positions.

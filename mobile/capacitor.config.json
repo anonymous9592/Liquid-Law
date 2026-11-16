@@ -1,0 +1,12 @@
+{
+  "appId": "com.stuthilabs.casecanvas",
+  "appName": "Case Canvas",
+  "webDir": "../prototype",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#111111"
+  }
+}

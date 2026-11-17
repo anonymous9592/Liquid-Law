@@ -108,3 +108,15 @@ Nothing leaves the browser: PDF.js renders, Tesseract.js OCRs in a Web Worker.
 Cloud OCR, user correction of the index, sync between devices, and the tablet shells
 (Capacitor). Those are Phase 1–2 in
 [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licence
+
+Case Canvas is copyright © 2026 Stuthi Labs Private Limited and is dual-licensed:
+
+- **Open source** under the [GNU Affero General Public License v3](LICENSE). You may use and
+  modify it, with credit, as long as any version you distribute or host is published under
+  the same licence.
+- **Commercial** for anyone who wants to ship or host it without publishing their source.
+  See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
+Bundled third-party libraries keep their own licences.

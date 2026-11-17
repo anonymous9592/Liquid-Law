@@ -1,10 +1,10 @@
 {
   "name": "casecanvas-mobile",
   "productName": "Case Canvas",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Case Canvas Android shell (Capacitor) around the same renderer as the web and desktop builds",
   "author": "Stuthi Labs Private Limited",
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
     "sync": "cap sync android",
